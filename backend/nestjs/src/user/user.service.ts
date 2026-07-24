@@ -201,12 +201,6 @@ export class UserService {
     const perPage = Number(limit) || 10;
     const skip = (currentPage - 1) * perPage;
 
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
-
-    const endOfToday = new Date();
-    endOfToday.setHours(23, 59, 59, 999);
-
     const whereCondition: any = {};
 
     if (statusFilter === 'pending') {
@@ -224,8 +218,8 @@ export class UserService {
     const [
       [unverifiedUsers, filteredTotalCount],
       pendingCount,
-      approvedTodayCount,
-      rejectedTodayCount,
+      approvedTotalCount,
+      rejectedTotalCount,
     ] = await Promise.all([
       this.userRepository.findAndCount({
         where: whereCondition,
@@ -251,29 +245,27 @@ export class UserService {
       this.userRepository.count({
         where: {
           is_verified: 1,
-          verified_at: Between(startOfToday, endOfToday),
         },
       }),
 
       this.userRepository.count({
         where: {
           is_verified: 2,
-          updated_at: Between(startOfToday, endOfToday),
         },
       }),
     ]);
 
-    let responseMessage = 'Data retrieved successfully.';
+    let responseMessage = 'Users found.';
     if (unverifiedUsers.length === 0) {
-      responseMessage = 'No users are currently waiting for account approval.';
+      responseMessage = 'No users found.';
     }
 
     return {
       message: responseMessage,
       summary: {
         pending: pendingCount,
-        approved_today: approvedTodayCount,
-        rejected_today: rejectedTodayCount,
+        approved_total: approvedTotalCount,
+        rejected_total: rejectedTotalCount,
       },
       meta: {
         total_items: filteredTotalCount,

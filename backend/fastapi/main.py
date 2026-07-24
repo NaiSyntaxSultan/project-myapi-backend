@@ -11,7 +11,7 @@ import os
 # ---------------------------------------------------------------------------
 # Database Connection Config
 # ---------------------------------------------------------------------------
-DB_HOST = os.getenv("DB_HOST", "mysql-db") # อ้างอิงชื่อ Service ใน Docker
+DB_HOST = os.getenv("DB_HOST", "mysql-db")
 DB_USER = os.getenv("DB_USERNAME", "root")
 DB_PASSWORD = os.getenv("MYSQL_PASSWORD", "")
 DB_DATABASE = os.getenv("DB_DATABASE", "")
@@ -91,20 +91,28 @@ def group_by_class(results) -> dict:
 
 
 def build_response(mode: str, filename: str, results) -> dict:
+    grouped_data = group_by_class(results)
+
+    total_detections = sum(len(data["confidences"]) for data in grouped_data.values())
+
+
     classes = {}
 
-    for class_name, data in group_by_class(results).items():
-        confs = data["confidences"]
+    for class_name, data in grouped_data.items():
+        count = len(data["confidences"])
+
+        percentage = round((count / total_detections) * 100, 2) if total_detections > 0 else 0.0
+
         classes[class_name] = {
-            "count":          len(confs),
-            "avg_confidence": round(sum(confs) / len(confs), 4),
+            "count":          count,
+            "percentage": percentage,
             "detections":     data["detections"],
         }
 
     return {
         "mode":             mode,
         "filename":         filename,
-        "total_detections": sum(v["count"] for v in classes.values()),
+        "total_detections": total_detections,
         "classes_found":    list(classes.keys()),
         "classes":          classes,
     }
