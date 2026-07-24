@@ -358,14 +358,12 @@ export class UserService {
     const [
       total_users,
       pending_verification,
-      dataset_images,
       total_batches,
       completed_batches_raw,
       [pending_users_data, total_pending_items]
     ] = await Promise.all([
       this.userRepository.count(),
       this.userRepository.count({ where: { is_verified: 0 } }),
-      this.imageRepository.count(),
       this.batchRepository.count(),
       
       this.batchRepository
@@ -392,12 +390,12 @@ export class UserService {
       })
     ]);
 
-    const prediction_jobs = completed_batches_raw.length;
+    const completed_batches = completed_batches_raw.length;
 
-    const pending_batches = total_batches - prediction_jobs;
+    const pending_batches = total_batches - completed_batches;
 
     const completed_percentage = total_batches > 0
-      ? ((prediction_jobs / total_batches) * 100).toFixed(2)
+      ? ((completed_batches / total_batches) * 100).toFixed(2)
       : 0;
 
     const pending_percentage = total_batches > 0 
@@ -407,8 +405,8 @@ export class UserService {
     return {
       total_users,
       pending_verification,
-      prediction_jobs,
-      dataset_images,
+      completed_batches,
+      pending_batches,
       pending_users_table: {
         data: pending_users_data,
         meta: {
