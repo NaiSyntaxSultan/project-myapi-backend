@@ -700,7 +700,6 @@ export class UserService {
   async undoRejectUser(targetUserId: number) {
     const user = await this.userRepository.findOne({
       where: { user_id: targetUserId },
-      select: ['user_id', 'is_verified'],
     });
 
     if (!user) {
@@ -725,8 +724,45 @@ export class UserService {
 
     await this.userRepository.save(user);
 
+    try {
+      await this.mailerService.sendMail({
+        to: user.email,
+        subject: 'Account Status Updated: Under Review - Avian Blood System',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e0e0e0; border-radius: 8px; color: #333333;">
+            <h2 style="color: #f57c00; margin-top: 0;">Account Status Updated ⏳</h2>
+            
+            <p>Dear <b>Dr. ${user.first_name} ${user.last_name}</b>,</p>
+            
+            <p>We would like to inform you that the previous decision regarding your registration account has been reconsidered by our administrative team.</p>
+            
+            <p>Your account status has been reset and is now back <b>under re-evaluation</b>. Our team will review your veterinary registration and documentation once again.</p>
+            
+            <!-- กล่องแจ้งเตือนสถานะสีส้ม/อำพัน (Pending) -->
+            <div style="background-color: #fff8e1; padding: 15px; border-left: 4px solid #f57c00; margin: 20px 0; border-radius: 4px;">
+              <b style="color: #f57c00; font-size: 14px; text-transform: uppercase;">Current Status: Pending Review</b>
+              <p style="margin: 8px 0 0 0; color: #444444; line-height: 1.5; font-size: 15px;">
+                You do not need to take any action at this time. We will notify you via email as soon as the verification process is complete.
+              </p>
+            </div>
+
+            <p>If you have submitted additional documents or have questions regarding this update, please contact our system administrator.</p>
+            
+            <br>
+            <p style="margin-bottom: 0;">Best regards,</p>
+            <b style="color: #555555;">Avian Blood System Team</b>
+            
+            <hr style="border: 0; border-top: 1px solid #eeeeee; margin: 25px 0 15px 0;">
+            <small style="color: #888888; font-size: 12px;">This is an automated notification. Please do not reply directly to this email.</small>
+          </div>
+        `,
+      });
+    } catch (err) {
+      console.log('Error sending email:', err);
+    }
+
     return {
-      message: 'User rejection has been undone successfully',
+      message: 'User rejection has been undone and a notification email has been sent successfully',
       data: {
         user_id: user.user_id,
         is_verified: user.is_verified,
