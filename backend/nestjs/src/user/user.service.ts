@@ -169,16 +169,30 @@ export class UserService {
     try {
       await this.mailerService.sendMail({
         to: user.email,
-        subject: 'ยืนยันการอนุมัติบัญชี - Avian Blood System',
+        subject: 'Account Approved - Avian Blood System',
         html: `
-          <div style="font-family: sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
-            <h2 style="color: #2e7d32;">บัญชีของคุณได้รับการอนุมัติแล้ว 🎉</h2>
-            <p>สวัสดีครับคุณ <b>${user.first_name} ${user.last_name}</b>,</p>
-            <p>ผู้ดูแลระบบได้ทำการตรวจสอบและอนุมัติบัญชีสัตวแพทย์ของคุณเรียบร้อยแล้วเมื่อวันที่ ${user.verified_at.toLocaleString('th-TH')}</p>
-            <p>ขณะนี้คุณสามารถเข้าสู่ระบบ <b>Avian Blood</b> ได้ทันที</p>
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e0e0e0; border-radius: 8px; color: #333333;">
+            <h2 style="color: #2e7d32; margin-top: 0;">Account Successfully Approved 🎉</h2>
+            
+            <p>Dear <b>Dr. ${user.first_name} ${user.last_name}</b>,</p>
+            
+            <p>We are pleased to inform you that your veterinary registration and professional license have been successfully verified by our administrative team.</p>
+            
+            <div style="background-color: #f1f8e9; padding: 15px; border-left: 4px solid #2e7d32; margin: 20px 0; border-radius: 4px;">
+              <b style="color: #2e7d32; font-size: 14px; text-transform: uppercase;">Status: Approved</b>
+              <p style="margin: 8px 0 0 0; color: #444444; line-height: 1.5; font-size: 15px;">
+                Verified on: ${user.verified_at.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
+              </p>
+            </div>
+
+            <p>You now have full access to the <b>Avian Blood System</b>. You can log in to your account at any time to start utilizing our automated avian blood smear analysis tools.</p>
+            
             <br>
-            <hr style="border: 0; border-top: 1px solid #eee;">
-            <small style="color: #888;">นี่เป็นอีเมลแจ้งเตือนอัตโนมัติ กรุณาอย่าตอบกลับ</small>
+            <p style="margin-bottom: 0;">Best regards,</p>
+            <b style="color: #555555;">Avian Blood System Team</b>
+            
+            <hr style="border: 0; border-top: 1px solid #eeeeee; margin: 25px 0 15px 0;">
+            <small style="color: #888888; font-size: 12px;">This is an automated notification. Please do not reply directly to this email.</small>
           </div>
         `,
       });
@@ -277,7 +291,7 @@ export class UserService {
     };
   }
 
-  async rejectUser(id: number) {
+  async rejectUser(id: number, reason?: string) {
     const user = await this.userRepository.findOne({ where: { user_id: id } });
     if (!user) {
       throw new BadRequestException('User to reject not found.');
@@ -296,19 +310,35 @@ export class UserService {
     user.is_verified = 2;
     await this.userRepository.save(user);
 
+    const rejectReason = reason?.trim() || 'Incomplete or invalid veterinary license and registration information.';
+
     try {
       await this.mailerService.sendMail({
         to: user.email,
-        subject: 'แจ้งผลการตรวจสอบบัญชี - Avian Blood System',
+        subject: 'Account Verification Update - Avian Blood System',
         html: `
-          <div style="font-family: sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
-            <h2 style="color: #d32f2f;">แจ้งผลการตรวจสอบบัญชี</h2>
-            <p>สวัสดีครับคุณ <b>${user.first_name} ${user.last_name}</b>,</p>
-            <p>ทางผู้ดูแลระบบได้ทำการตรวจสอบข้อมูลและใบอนุญาตสัตวแพทย์ของคุณแล้ว <b>แต่ไม่สามารถอนุมัติบัญชีของคุณได้ในขณะนี้</b></p>
-            <p>อาจเกิดจากข้อมูลไม่ครบถ้วนหรือไม่ถูกต้อง หากมีข้อสงสัยหรือต้องการส่งข้อมูลเพิ่มเติม กรุณาติดต่อผู้ดูแลระบบ</p>
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e0e0e0; border-radius: 8px; color: #333333;">
+            <h2 style="color: #d32f2f; margin-top: 0;">Account Verification Notice</h2>
+            
+            <p>Dear <b>Dr. ${user.first_name} ${user.last_name}</b>,</p>
+            
+            <p>Thank you for registering with the <b>Avian Blood System</b>. Our administrative team has carefully reviewed your registration details and veterinary license.</p>
+            
+            <p>We regret to inform you that we are <b>unable to approve your account at this time</b>.</p>
+            
+            <div style="background-color: #fff5f5; padding: 15px; border-left: 4px solid #d32f2f; margin: 20px 0; border-radius: 4px;">
+              <b style="color: #d32f2f; font-size: 14px; text-transform: uppercase;">Reason for Rejection:</b>
+              <p style="margin: 8px 0 0 0; color: #444444; line-height: 1.5; font-size: 15px;">${rejectReason}</p>
+            </div>
+
+            <p>If you believe this was a mistake, or if you would like to provide updated documentation for re-evaluation, please contact our system administrator.</p>
+            
             <br>
-            <hr style="border: 0; border-top: 1px solid #eee;">
-            <small style="color: #888;">นี่เป็นอีเมลแจ้งเตือนอัตโนมัติ กรุณาอย่าตอบกลับ</small>
+            <p style="margin-bottom: 0;">Best regards,</p>
+            <b style="color: #555555;">Avian Blood System Team</b>
+            
+            <hr style="border: 0; border-top: 1px solid #eeeeee; margin: 25px 0 15px 0;">
+            <small style="color: #888888; font-size: 12px;">This is an automated notification. Please do not reply directly to this email.</small>
           </div>
         `,
       });

@@ -18,6 +18,7 @@ import {
   ApiOperation,
   ApiQuery,
   ApiTags,
+  ApiBody,
 } from '@nestjs/swagger';
 import { AdminGuard } from 'src/auth/guards/admin.guard';
 import { UpdateRoleDto } from './dto/update-role.dto';
@@ -76,8 +77,21 @@ export class VerifyUserController {
   @ApiBearerAuth()
   @Patch('admin/reject/:id')
   @ApiOperation({ summary: 'ปฏิเสธบัญชีสัตวแพทย์และส่งอีเมล (สำหรับ Admin)' })
-  async rejectUser(@Param('id', ParseIntPipe) id: number) {
-    return this.userService.rejectUser(id);
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        reason: {
+          type: 'string',
+          example: 'Incomplete or invalid veterinary license and registration information.',
+          description: 'เหตุผลในการปฏิเสธบัญชี',
+        },
+      },
+    },
+  })
+  async rejectUser(@Param('id', ParseIntPipe) id: number,
+    @Body('reason') reason?: string,) {
+    return this.userService.rejectUser(id, reason);
   }
 
   @UseGuards(AuthGuard('jwt'), AdminGuard)
