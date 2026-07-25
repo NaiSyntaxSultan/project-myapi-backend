@@ -97,7 +97,7 @@ export class VerifyUserController {
   @UseGuards(AuthGuard('jwt'), AdminGuard)
   @ApiBearerAuth()
   @Patch('admin/undo-reject/:id')
-  @ApiOperation({ summary: 'ยกเลิกการปฏิเสธบัญชี (สำหรับ Admin)' })
+  @ApiOperation({ summary: 'ยกเลิกการปฏิเสธบัญชีและส่งอีเมล (สำหรับ Admin)' })
   async undoRejectUser(
     @Param('id', ParseIntPipe) id: number,
   ) {

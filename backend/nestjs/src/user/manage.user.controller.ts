@@ -18,6 +18,7 @@ import {
   ApiOperation,
   ApiQuery,
   ApiTags,
+  ApiBody,
 } from '@nestjs/swagger';
 import { AdminGuard } from 'src/auth/guards/admin.guard';
 import { UpdateRoleDto } from './dto/update-role.dto';
@@ -84,9 +85,22 @@ export class ManageUserController {
   @UseGuards(AuthGuard('jwt'), AdminGuard)
   @ApiBearerAuth()
   @Patch('admin/suspend/:id')
-  @ApiOperation({ summary: 'ระงับบัญชีผู้ใช้งาน (สำหรับ Admin)' })
-  async suspendUser(@Param('id', ParseIntPipe) id: number, @Request() req) {
-    return this.userService.suspendUser(id, req.user.userId);
+  @ApiOperation({ summary: 'ระงับบัญชีผู้ใช้งานและส่งอีเมล (สำหรับ Admin)' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        reason: {
+          type: 'string',
+          example: 'Violation of system terms of service or suspicious activity detected.',
+          description: 'เหตุผลที่ทำการระงับบัญชี',
+        },
+      },
+    },
+  })
+  async suspendUser(@Param('id', ParseIntPipe) id: number, @Request() req,
+    @Body('reason') reason?: string,) {
+    return this.userService.suspendUser(id, req.user.userId, reason);
   }
 
   @UseGuards(AuthGuard('jwt'), AdminGuard)

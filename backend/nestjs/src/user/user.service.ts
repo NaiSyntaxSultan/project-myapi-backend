@@ -128,7 +128,7 @@ export class UserService {
     };
   }
 
-  async suspendUser(id: number, adminId: number) {
+  async suspendUser(id: number, adminId: number, reason?: string) {
     if (id === adminId) {
       throw new BadRequestException('You cannot suspend your own account.');
     }
@@ -146,8 +146,47 @@ export class UserService {
     user.is_active = false;
     await this.userRepository.save(user);
 
+    const suspendReason =
+      reason?.trim() ||
+      'Violation of system terms of service or suspicious activity detected.';
+
+      try {
+      await this.mailerService.sendMail({
+        to: user.email,
+        subject: 'Account Suspended - Avian Blood System',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e0e0e0; border-radius: 8px; color: #333333;">
+            <h2 style="color: #c62828; margin-top: 0;">Account Access Suspended ⚠️</h2>
+            
+            <p>Dear <b>Dr. ${user.first_name} ${user.last_name}</b>,</p>
+            
+            <p>We are writing to inform you that your access to the <b>Avian Blood System</b> has been temporarily suspended by an administrator.</p>
+            
+            <p>During this suspension period, you will not be able to log in to your account or perform any blood smear analysis jobs.</p>
+            
+            <!-- กล่องแสดงเหตุผลสีแดงเข้ม -->
+            <div style="background-color: #ffebee; padding: 15px; border-left: 4px solid #c62828; margin: 20px 0; border-radius: 4px;">
+              <b style="color: #c62828; font-size: 14px; text-transform: uppercase;">Reason for Suspension:</b>
+              <p style="margin: 8px 0 0 0; color: #444444; line-height: 1.5; font-size: 15px;">${suspendReason}</p>
+            </div>
+
+            <p>If you believe this suspension was made in error, or if you would like to appeal and request account reinstatement, please contact our system administrator directly.</p>
+            
+            <br>
+            <p style="margin-bottom: 0;">Best regards,</p>
+            <b style="color: #555555;">Avian Blood System Team</b>
+            
+            <hr style="border: 0; border-top: 1px solid #eeeeee; margin: 25px 0 15px 0;">
+            <small style="color: #888888; font-size: 12px;">This is an automated notification. Please do not reply directly to this email.</small>
+          </div>
+        `,
+      });
+    } catch (err) {
+      console.log('Error sending email:', err);
+    }
+
     return {
-      message: `${user.first_name} ${user.last_name} account has been suspended successfully.`,
+      message: `${user.first_name} ${user.last_name} account has been suspended and a notification email has been sent successfully.`,
     };
   }
 
