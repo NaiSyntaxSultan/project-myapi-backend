@@ -875,4 +875,39 @@ export class UserService {
       }
     };
   }
+
+  async deleteMyBatchPredictions(userId: number, batchId: number) {
+    const batch = await this.batchRepository.findOne({
+      where: { 
+        batch_id: batchId, 
+        user: { user_id: userId } 
+      },
+      relations: ['images', 'images.prediction', 'images.prediction.detections'],
+    });
+
+    if (!batch) {
+      throw new NotFoundException('Batch not found, or you do not have permission to modify it');
+    }
+
+    if (!batch.images || batch.images.length === 0) {
+      throw new BadRequestException('No images found in this batch.');
+    }
+
+    for (const image of batch.images) {
+      if (image.prediction) {
+        if (image.prediction.detections && image.prediction.detections.length > 0) {
+          await this.detectionRepository.remove(image.prediction.detections);
+        }
+        await this.imageRepository.manager.remove(image.prediction);
+      }
+
+      image.image_status = 'pending';
+    }
+
+    await this.imageRepository.save(batch.images);
+
+    return {
+      message: 'Batch predictions deleted successfully. All images are now set to pending status.',
+    };
+  }
 }

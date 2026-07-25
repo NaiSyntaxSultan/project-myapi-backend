@@ -59,4 +59,13 @@ export class ProfileController {
   ) {
     return this.userService.updateMyProfile(req.user.userId, updateDto, file);
   }
+
+  @Delete('batches/:id/predictions')
+  @ApiOperation({ summary: 'ลบเฉพาะผลการทำนายทั้งชุด (ภาพยังอยู่ เปลี่ยนสถานะเป็น pending)' })
+  async deleteMyBatchPredictions(
+    @Request() req,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.userService.deleteMyBatchPredictions(req.user.userId, id);
+  }
 }
