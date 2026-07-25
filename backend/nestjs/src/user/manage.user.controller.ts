@@ -62,19 +62,20 @@ export class ManageUserController {
     example: 10,
   })
   async getAllUsers(
+    @Request() req,
     @Query('role') role?: string,
     @Query('email') email?: string,
     @Query('status') status?: string,
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10,
   ) {
-    return this.userService.findAllUsers(role, email, status, page, limit);
+    return this.userService.findAllUsers(req.user.userId, role, email, status, page, limit);
   }
 
   @UseGuards(AuthGuard('jwt'), AdminGuard)
   @ApiBearerAuth()
   @Patch('admin/update-role/:id')
-  @ApiOperation({ summary: 'แก้ไข Role ของผู้ใช้งาน (สำหรับ Admin)' })
+  @ApiOperation({ summary: 'แก้ไข Role ของผู้ใช้งานและส่งอีเมล (สำหรับ Admin)' })
   async updateRole(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateRoleDto: UpdateRoleDto,
@@ -106,7 +107,7 @@ export class ManageUserController {
   @UseGuards(AuthGuard('jwt'), AdminGuard)
   @ApiBearerAuth()
   @Patch('admin/activate/:id')
-  @ApiOperation({ summary: 'ปลดระงับบัญชีผู้ใช้งาน (สำหรับ Admin)' })
+  @ApiOperation({ summary: 'ปลดระงับบัญชีผู้ใช้งานและส่งอีเมล (สำหรับ Admin)' })
   async activateUser(
     @Param('id', ParseIntPipe) id: number,
   ) {

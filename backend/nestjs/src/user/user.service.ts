@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
-import { Repository, Between, Like, MoreThanOrEqual, In } from 'typeorm';
+import { Repository, Between, Like, MoreThanOrEqual, In, Not } from 'typeorm';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -35,6 +35,7 @@ export class UserService {
   }
 
   async findAllUsers(
+    currentAdminId: number,
     roleFilter?: string, 
     searchEmail?: string, 
     statusFilter?: string,
@@ -48,6 +49,7 @@ export class UserService {
 
     const whereCondition: any = {
       is_verified: 1,
+      user_id: Not(currentAdminId),
     };
 
     if (roleFilter) {
@@ -123,8 +125,41 @@ export class UserService {
     user.role = updateRoleDto.role;
     await this.userRepository.save(user);
 
+    try {
+      await this.mailerService.sendMail({
+        to: user.email,
+        subject: 'Account Role Updated - Avian Blood System',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e0e0e0; border-radius: 8px; color: #333333;">
+            <h2 style="color: #1976d2; margin-top: 0;">Account Role Updated 🛡️</h2>
+            
+            <p>Dear <b>Dr. ${user.first_name} ${user.last_name}</b>,</p>
+            
+            <p>We would like to inform you that your account role within the <b>Avian Blood System</b> has been updated by an administrator.</p>
+            
+            <!-- กล่องแสดง Role ใหม่สีน้ำเงิน -->
+            <div style="background-color: #e3f2fd; padding: 15px; border-left: 4px solid #1976d2; margin: 20px 0; border-radius: 4px;">
+              <b style="color: #1976d2; font-size: 14px; text-transform: uppercase;">New Assigned Role:</b>
+              <p style="margin: 8px 0 0 0; color: #444444; line-height: 1.5; font-size: 15px; font-weight: bold;">${user.role}</p>
+            </div>
+
+            <p>You can now log in to your account to access features and permissions corresponding to your new role.</p>
+            
+            <br>
+            <p style="margin-bottom: 0;">Best regards,</p>
+            <b style="color: #555555;">Avian Blood System Team</b>
+            
+            <hr style="border: 0; border-top: 1px solid #eeeeee; margin: 25px 0 15px 0;">
+            <small style="color: #888888; font-size: 12px;">This is an automated notification. Please do not reply directly to this email.</small>
+          </div>
+        `,
+      });
+    } catch (err) {
+      console.log('Error sending email:', err);
+    }
+
     return {
-      message: `${user.first_name} role has been updated to ${user.role} successfully.`,
+      message: `${user.first_name} role has been updated to ${user.role} and a notification email has been sent successfully.`,
     };
   }
 
@@ -704,7 +739,6 @@ export class UserService {
   async activateUser(targetUserId: number) {
     const user = await this.userRepository.findOne({
       where: { user_id: targetUserId },
-      select: ['user_id', 'is_active'],
     });
 
     if (!user) {
@@ -725,8 +759,43 @@ export class UserService {
 
     await this.userRepository.save(user);
 
+    try {
+      await this.mailerService.sendMail({
+        to: user.email,
+        subject: 'Account Access Restored - Avian Blood System',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e0e0e0; border-radius: 8px; color: #333333;">
+            <h2 style="color: #2e7d32; margin-top: 0;">Account Access Restored 🟢</h2>
+            
+            <p>Dear <b>Dr. ${user.first_name} ${user.last_name}</b>,</p>
+            
+            <p>We are pleased to inform you that the suspension on your <b>Avian Blood System</b> account has been lifted by an administrator.</p>
+            
+            <!-- กล่องแสดงสถานะสีเขียว -->
+            <div style="background-color: #f1f8e9; padding: 15px; border-left: 4px solid #2e7d32; margin: 20px 0; border-radius: 4px;">
+              <b style="color: #2e7d32; font-size: 14px; text-transform: uppercase;">Current Status: Active</b>
+              <p style="margin: 8px 0 0 0; color: #444444; line-height: 1.5; font-size: 15px;">
+                Your account privileges and access rights have been fully restored. You can now log in and resume using our blood smear analysis features.
+              </p>
+            </div>
+
+            <p>Thank you for your cooperation. If you have any questions regarding your account status, please feel free to contact our system administrator.</p>
+            
+            <br>
+            <p style="margin-bottom: 0;">Best regards,</p>
+            <b style="color: #555555;">Avian Blood System Team</b>
+            
+            <hr style="border: 0; border-top: 1px solid #eeeeee; margin: 25px 0 15px 0;">
+            <small style="color: #888888; font-size: 12px;">This is an automated notification. Please do not reply directly to this email.</small>
+          </div>
+        `,
+      });
+    } catch (err) {
+      console.log('Error sending email:', err);
+    }
+
     return {
-      message: 'User account activated successfully',
+      message: 'User account activated and notification email sent successfully',
       data: {
         user_id: user.user_id,
         is_active: user.is_active,
