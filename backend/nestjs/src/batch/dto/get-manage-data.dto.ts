@@ -38,7 +38,7 @@ export class GetManageDataDto {
   @IsString()
   stain_type?: string;
 
-  @ApiPropertyOptional({ description: 'สถานะ (เช่น pending, completed)' })
+  @ApiPropertyOptional({ description: 'สถานะ (เช่น pending, completed, suspended)' })
   @IsOptional()
   @IsString()
   status?: string;

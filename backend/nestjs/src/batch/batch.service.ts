@@ -148,7 +148,7 @@ export class BatchService {
     if (startDate && endDate) {
       query.andWhere('batch.created_at BETWEEN :startDate AND :endDate', {
         startDate: `${startDate} 00:00:00`,
-        endDate: `${endDate} 23:59:59`,
+        endDate: `${endDate} 23:59:59.999`,
       });
     }
 
@@ -158,20 +158,18 @@ export class BatchService {
 
     if (status) {
       if (status === 'completed') {
-        // เงื่อนไข: Batch นั้นต้องไม่มีรูปไหนเลยที่สถานะเป็น pending
         query
           .andWhere((qb) => {
             const subQuery = qb
               .subQuery()
               .select('img.batch_id')
               .from(Image, 'img')
-              .where('img.image_status = :pendingStatus')
+              .where('img.image_status != :completedStatus')
               .getQuery();
             return `batch.batch_id NOT IN ${subQuery}`;
           })
-          .setParameter('pendingStatus', 'pending');
+          .setParameter('completedStatus', 'completed');
       } else if (status === 'pending') {
-        // เงื่อนไข: Batch นั้นมีรูปที่สถานะเป็น pending อย่างน้อย 1 รูป
         query
           .andWhere((qb) => {
             const subQuery = qb
@@ -183,6 +181,18 @@ export class BatchService {
             return `batch.batch_id IN ${subQuery}`;
           })
           .setParameter('pendingStatus', 'pending');
+      } else if (status === 'suspended') {
+        query
+          .andWhere((qb) => {
+            const subQuery = qb
+              .subQuery()
+              .select('img.batch_id')
+              .from(Image, 'img')
+              .where('img.image_status = :suspendedStatus')
+              .getQuery();
+            return `batch.batch_id IN ${subQuery}`;
+          })
+          .setParameter('suspendedStatus', 'suspended');
       }
     }
 
@@ -193,18 +203,25 @@ export class BatchService {
       .getManyAndCount();
 
     const table_data = batches.map((batch) => {
+      const hasSuspendedImage = batch.images.some(
+        (img) => img.image_status === 'suspended',
+      );
       const allImagesCompleted = batch.images.every(
         (img) => img.image_status === 'completed',
       );
-      const batchStatus =
-        allImagesCompleted && batch.images.length > 0 ? 'completed' : 'pending';
+      let batchStatus = 'pending';
+      if (hasSuspendedImage) {
+        batchStatus = 'suspended'; 
+      } else if (allImagesCompleted && batch.images.length > 0) {
+        batchStatus = 'completed';
+      }
 
       return {
         batch_id: batch.batch_id,
         smear_id: batch.smear_id,
         owner_email: batch.user ? batch.user.email : 'Unknown',
         description: batch.description || '-',
-        chicken_type: batch.chicken_type, // ประเภทเม็ดเลือด/สายพันธุ์ไก่
+        chicken_type: batch.chicken_type, 
         stain_type: batch.stain_type,
         total_images_in_batch: batch.images.length,
         status: batchStatus,
