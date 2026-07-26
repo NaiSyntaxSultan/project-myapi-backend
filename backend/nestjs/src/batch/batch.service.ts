@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Batch } from './entities/batch.entity';
 import { Repository } from 'typeorm';
@@ -260,17 +260,26 @@ export class BatchService {
     };
   }
 
-  async deleteBatch(batchId: number) {
+  async suspendBatch(batchId: number) {
     const batch = await this.batchRepository.findOne({
       where: { batch_id: batchId },
+      relations: ['images'],
     });
     if (!batch) {
       throw new NotFoundException('Dataset not found.');
     }
 
-    await this.batchRepository.remove(batch);
+    if (!batch.images || batch.images.length === 0) {
+      throw new BadRequestException('No images found in this dataset.');
+    }
 
-    return { message: `Dataset ${batch.smear_id} deleted successfully.` };
+    for (const image of batch.images) {
+      image.image_status = 'suspended';
+    }
+
+    await this.imageRepository.save(batch.images);
+
+    return { message: `Dataset ${batch.smear_id} has been suspended successfully.` };
   }
 
   async getHomeFeed(queryDto: GetHomeDataDto) {

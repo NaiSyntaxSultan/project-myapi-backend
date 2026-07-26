@@ -1,4 +1,4 @@
-import { Controller, Get, Query, Param, Delete, UseGuards, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Query, Param, Patch, UseGuards, ParseIntPipe } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { AdminGuard } from 'src/auth/guards/admin.guard';
@@ -24,9 +24,9 @@ export class ManageDataController {
     return this.batchService.getBatchDetails(id);
   }
 
-  @Delete('admin/delete/:id')
-  @ApiOperation({ summary: 'ลบชุดข้อมูลออกจากระบบ (สำหรับ Admin)' })
-  async deleteBatch(@Param('id', ParseIntPipe) id: number) {
-    return this.batchService.deleteBatch(id);
+  @Patch('admin/suspend/:id')
+  @ApiOperation({ summary: 'ระงับชุดข้อมูล (สำหรับ Admin)' })
+  async suspendBatch(@Param('id', ParseIntPipe) id: number) {
+    return this.batchService.suspendBatch(id);
   }
 }
