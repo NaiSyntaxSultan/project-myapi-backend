@@ -271,7 +271,40 @@ export class BatchService {
       veterinary_license: batch.user.veterinary_license,
     };
 
+    const cell_counts = {
+      Heterophils: 0,
+      Eosinophils: 0,
+      Basophils: 0,
+      Lymphocytes: 0,
+      Monocytes: 0,
+      Thrombocytes: 0,
+    };
+
+    if (batch.images && batch.images.length > 0) {
+      for (const image of batch.images) {
+        if (image.prediction) {
+          const pred = image.prediction;
+          cell_counts.Heterophils += pred.numOfHeterophils || 0;
+          cell_counts.Eosinophils += pred.numOfEosinophils || 0;
+          cell_counts.Basophils += pred.numOfBasophils || 0;
+          cell_counts.Lymphocytes += pred.numOfLymphocytes || 0;
+          cell_counts.Monocytes += pred.numOfMonocytes || 0;
+          cell_counts.Thrombocytes += pred.numOfThrombocytes || 0;
+        }
+      }
+    }
+
+    const total_cells_detected = Object.values(cell_counts).reduce(
+      (sum, count) => sum + count,
+      0,
+    );
+
     return {
+      summary: {
+        total_images_in_batch: batch.images ? batch.images.length : 0,
+        total_cells_detected,
+        cell_counts,
+      },
       ...batch,
       user: safeUser,
     };
