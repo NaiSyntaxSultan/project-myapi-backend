@@ -518,11 +518,16 @@ export class UserService {
 
     let absoluteCompletedCount = 0;
     let absolutePendingCount = 0;
+    let absoluteSuspendedCount = 0;
 
     for (const b of allUserBatches) {
       const totalImg = b.images.length;
+      const hasSuspendedImg = b.images.some((img) => img.image_status === 'suspended');
       const completedImg = b.images.filter((img) => img.image_status === 'completed').length;
-      if (totalImg > 0 && completedImg === totalImg) {
+
+      if (hasSuspendedImg) {
+        absoluteSuspendedCount++; 
+      } else if (totalImg > 0 && completedImg === totalImg) {
         absoluteCompletedCount++;
       } else {
         absolutePendingCount++;
@@ -558,12 +563,15 @@ export class UserService {
 
     const completed_batches: any[] = [];
     const pending_batches: any[] = [];
+    const suspended_batches: any[] = [];
 
     for (const batch of batches) {
       const totalImages = batch.images.length;
+      const hasSuspended = batch.images.some((img) => img.image_status === 'suspended');
       const completedImages = batch.images.filter((img) => img.image_status === 'completed');
-      
-      const isCompleted = totalImages > 0 && completedImages.length === totalImages;
+
+      const isCompleted = !hasSuspended && totalImages > 0 && completedImages.length === totalImages;
+      const isSuspended = hasSuspended;
 
       let latestPredictionDate: Date | null = null;
       if (isCompleted) {
@@ -578,13 +586,81 @@ export class UserService {
       if (filterStart && filterEnd) {
         if (isCompleted) {
           if (!latestPredictionDate || latestPredictionDate < filterStart || latestPredictionDate > filterEnd) {
-            continue; 
+            continue;
           }
         } else {
           if (batch.created_at < filterStart || batch.created_at > filterEnd) {
-            continue; 
+            continue;
           }
         }
+      }
+
+      const batchCellCounts = {
+        Heterophil: 0,
+        Eosinophil: 0,
+        Basophil: 0,
+        Lymphocyte: 0,
+        Monocyte: 0,
+        Thrombocyte: 0,
+      };
+
+      const formattedImages = batch.images.map((img) => {
+        let predictionData: any = null;
+
+        if (img.prediction) {
+          const pred = img.prediction;
+          const imgCounts = {
+            Heterophil: pred.numOfHeterophils || 0,
+            Eosinophil: pred.numOfEosinophils || 0,
+            Basophil: pred.numOfBasophils || 0,
+            Lymphocyte: pred.numOfLymphocytes || 0,
+            Monocyte: pred.numOfMonocytes || 0,
+            Thrombocyte: pred.numOfThrombocytes || 0,
+          };
+
+          batchCellCounts.Heterophil += imgCounts.Heterophil;
+          batchCellCounts.Eosinophil += imgCounts.Eosinophil;
+          batchCellCounts.Basophil += imgCounts.Basophil;
+          batchCellCounts.Lymphocyte += imgCounts.Lymphocyte;
+          batchCellCounts.Monocyte += imgCounts.Monocyte;
+          batchCellCounts.Thrombocyte += imgCounts.Thrombocyte;
+
+          const imageTotalCells = Object.values(imgCounts).reduce((a, b) => a + b, 0);
+          const imageClasses: Record<string, { count: number; percentage: number }> = {};
+
+          for (const [cellType, count] of Object.entries(imgCounts)) {
+            const percentage = imageTotalCells > 0
+              ? Number(((count / imageTotalCells) * 100).toFixed(2))
+              : 0;
+
+            imageClasses[cellType] = { count, percentage };
+          }
+
+          predictionData = {
+            ...pred,
+            total_cells_detected: imageTotalCells,
+            classes: imageClasses,
+          };
+        }
+
+        return {
+          image_id: img.image_id,
+          image_name: img.image_name,
+          image_status: img.image_status,
+          image_path: img.image_path,
+          prediction: predictionData,
+        };
+      });
+
+      const batchTotalCells = Object.values(batchCellCounts).reduce((a, b) => a + b, 0);
+      const batchClasses: Record<string, { count: number; percentage: number }> = {};
+
+      for (const [cellType, count] of Object.entries(batchCellCounts)) {
+        const percentage = batchTotalCells > 0
+          ? Number(((count / batchTotalCells) * 100).toFixed(2))
+          : 0;
+
+        batchClasses[cellType] = { count, percentage };
       }
 
       const formattedBatch = {
@@ -595,24 +671,25 @@ export class UserService {
         age: batch.age,
         stain_type: batch.stain_type,
         description: batch.description,
-        status: isCompleted ? 'completed' : 'pending',
+        status: isSuspended ? 'suspended' : isCompleted ? 'completed' : 'pending',
         created_at: batch.created_at,
-        predicted_at: isCompleted ? latestPredictionDate : null, 
+        predicted_at: isCompleted ? latestPredictionDate : null,
         owner: {
           first_name: user.first_name,
           last_name: user.last_name,
           profile_image: user.profile_image,
         },
-        images: batch.images.map((img) => ({
-          image_id: img.image_id,
-          image_name: img.image_name,
-          image_status: img.image_status,
-          image_path: img.image_path,
-          prediction: img.prediction ? img.prediction : null,
-        })),
+        summary: {
+          total_images_in_batch: totalImages,
+          total_cells_detected: batchTotalCells,
+          classes: batchClasses, 
+        },
+        images: formattedImages, 
       };
 
-      if (isCompleted) {
+      if (isSuspended) {
+        suspended_batches.push(formattedBatch);
+      } else if (isCompleted) {
         completed_batches.push(formattedBatch);
       } else {
         pending_batches.push(formattedBatch);
@@ -621,9 +698,11 @@ export class UserService {
 
     const totalCompletedFiltered = completed_batches.length;
     const totalPendingFiltered = pending_batches.length;
+    const totalSuspendedFiltered = suspended_batches.length;
 
     const paginatedCompleted = completed_batches.slice(skip, skip + limit);
     const paginatedPending = pending_batches.slice(skip, skip + limit);
+    const paginatedSuspended = suspended_batches.slice(skip, skip + limit);
 
     return {
       message: 'Profile and batch data retrieved successfully',
@@ -633,27 +712,37 @@ export class UserService {
         profile_image: user.profile_image,
         email: user.email,
         role: user.role,
-        total_completed_batches: absoluteCompletedCount, 
-        total_pending_batches: absolutePendingCount,     
+        total_completed_batches: absoluteCompletedCount,
+        total_pending_batches: absolutePendingCount,
+        total_suspended_batches: absoluteSuspendedCount, 
       },
       data: {
         completed_batches: {
           items: paginatedCompleted,
           meta: {
             total_items: totalCompletedFiltered,
-            current_page: page,
-            per_page: limit,
+            current_page: Number(page),
+            per_page: Number(limit),
             total_pages: Math.ceil(totalCompletedFiltered / limit),
-          }
+          },
         },
         pending_batches: {
           items: paginatedPending,
           meta: {
             total_items: totalPendingFiltered,
-            current_page: page,
-            per_page: limit,
+            current_page: Number(page),
+            per_page: Number(limit),
             total_pages: Math.ceil(totalPendingFiltered / limit),
-          }
+          },
+        },
+        suspended_batches: { 
+          items: paginatedSuspended,
+          meta: {
+            total_items: totalSuspendedFiltered,
+            current_page: Number(page),
+            per_page: Number(limit),
+            total_pages: Math.ceil(totalSuspendedFiltered / limit),
+          },
         },
       },
     };
