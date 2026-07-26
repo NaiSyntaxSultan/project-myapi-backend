@@ -157,65 +157,100 @@ async def predict_batch(
 
     prediction_results = []
 
-    # เชื่อมต่อฐานข้อมูลก่อนเริ่มลูป
+
+    ### Step 1 ดึงข้อมูล จากฐานข้อมูล
+    db_records = {}
     try:
         connection = get_db_connection()
+        try:
+            with connection.cursor() as cursor:
+                for image in images:
+                    if image.content_type and image.content_type.startswith("image/"):
+                        sql = "SELECT image_id, image_name FROM images WHERE image_path LIKE %s LIMIT 1"
+                        cursor.execute(sql, ('%' + image.filename,))
+                        record = cursor.fetchone()
+                        if record:
+                            db_records[image.filename] = record
+        finally:
+            connection.close()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"เชื่อมต่อฐานข้อมูลล้มเหลว: {str(e)}")
+    ###
 
-    try:
-        with connection.cursor() as cursor:
-            # วนลูปประมวลผลรูปภาพทีละไฟล์จาก Array ที่ส่งมา
-            for image in images:
-                if not image.content_type.startswith("image/"):
-                    prediction_results.append({
-                        "filename": image.filename,
-                        "error": "ไม่ใช่ไฟล์รูปภาพ ข้ามการทำงาน"
-                    })
-                    continue
+    ### Step 2 วนลูปประมวลผลภาพด้วยโมเดล AI
+    for image in images:
+        if not image.content_type or not image.content_type.startswith("image/"):
+            prediction_results.append({
+                "filename": image.filename,
+                "error": "ไม่ใช่ไฟล์รูปภาพ ข้ามการทำงาน"
+            })
+            continue
 
-                # 1. ค้นหา image_id และ image_name จากฐานข้อมูล
-                # เนื่องจาก DB เก็บ image_path เป็น 'uploads/batches/smear-xxx.jpg' จึงใช้ LIKE %filename
-                sql = "SELECT image_id, image_name FROM images WHERE image_path LIKE %s LIMIT 1"
-                cursor.execute(sql, ('%' + image.filename,))
-                db_record = cursor.fetchone()
+        record = db_records.get(image.filename)
+        image_id = record["image_id"] if record else None
+        image_name = record["image_name"] if record else "Unknown"
 
-                image_id = db_record["image_id"] if db_record else None
-                image_name = db_record["image_name"] if db_record else "Unknown"
+        try:
+            await image.seek(0)
 
-                # 2. ประมวลผลภาพด้วยโมเดล AI
-                try:
-                    pil_image = read_image(image)
-                    results   = MODELS[mode](pil_image, conf=CONF_THRESHOLD)
-                    
-                    # 3. จัดโครงสร้างข้อมูลใหม่ให้ตรงกับผลลัพธ์ที่ต้องการ
-                    image_result = build_response(mode, image.filename, results)
-                    
-                    formatted_result = {
-                        "image_id": image_id,
-                        "mode": mode,
-                        "image_name": image_name,
-                        "filename": image_result["filename"],
-                        "total_detections": image_result["total_detections"],
-                        "classes_found": image_result["classes_found"],
-                        "classes": image_result["classes"]
-                    }
-                    
-                    prediction_results.append(formatted_result)
-                    
-                except Exception as e:
-                    prediction_results.append({
-                        "filename": image.filename,
-                        "error": f"เกิดข้อผิดพลาด: {str(e)}"
-                    })
-    finally:
-        # อย่าลืมปิดคอนเนกชันฐานข้อมูลเมื่อเสร็จสิ้นการประมวลผลทั้ง Batch
-        connection.close()
+            pil_image = read_image(image)
+            results   = MODELS[mode](pil_image, conf=CONF_THRESHOLD)
+            
+            image_result = build_response(mode, image.filename, results)
+            
+            formatted_result = {
+                "image_id": image_id,
+                "mode": mode,
+                "image_name": image_name,
+                "filename": image_result["filename"],
+                "total_detections": image_result["total_detections"],
+                "classes_found": image_result["classes_found"],
+                "classes": image_result["classes"]
+            }
+            
+            prediction_results.append(formatted_result)
+            
+        except Exception as e:
+            prediction_results.append({
+                "filename": image.filename,
+                "error": f"เกิดข้อผิดพลาด: {str(e)}"
+            })
+    ###
 
-    # ส่งคืนข้อมูลภาพทั้งหมดที่อยู่ใน Array กลับไปให้หน้าเว็บ
+    ### Step 3 คำนวณสรุปยอดรวม
+    batch_total_detections = 0
+    batch_class_counts = defaultdict(int)
+    success_count = 0
+    failed_count = 0
+
+    for result in prediction_results:
+        if "error" not in result:
+            success_count += 1
+            batch_total_detections += result.get("total_detections", 0)
+            for class_name, class_data in result.get("classes", {}).items():
+                batch_class_counts[class_name] += class_data.get("count", 0)
+        else:
+            failed_count += 1
+
+    summary_classes = {}
+    for class_name, count in batch_class_counts.items():
+        percentage = round((count / batch_total_detections) * 100, 2) if batch_total_detections > 0 else 0.0
+        summary_classes[class_name] = {
+            "count": count,
+            "percentage": percentage
+        }
+
     return {
         "message": "Dataset processed successfully.",
         "mode": mode,
-        "total_images_processed": len(prediction_results),
+        "summary": {
+            "total_images_submitted": len(prediction_results),
+            "total_images_processed": success_count,
+            "total_images_failed": failed_count,
+            "total_detections": batch_total_detections,
+            "classes_found": list(summary_classes.keys()),
+            "classes": summary_classes
+        },
         "data": prediction_results 
     }
+    ###
