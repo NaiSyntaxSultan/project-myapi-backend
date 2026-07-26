@@ -271,39 +271,90 @@ export class BatchService {
       veterinary_license: batch.user.veterinary_license,
     };
 
+    // 1. ตัวแปรสำหรับสะสมยอดรวมทั้งชุดข้อมูล (Batch Level)
     const cell_counts = {
-      Heterophils: 0,
-      Eosinophils: 0,
-      Basophils: 0,
-      Lymphocytes: 0,
-      Monocytes: 0,
-      Thrombocytes: 0,
+      Heterophil: 0,
+      Eosinophil: 0,
+      Basophil: 0,
+      Lymphocyte: 0,
+      Monocyte: 0,
+      Thrombocyte: 0,
     };
 
+    // 2. วนลูปจัดการรูปภาพ: ทั้งสะสมยอดรวมทั้งชุด และคำนวณเปอร์เซ็นต์ระดับภาพ (Image Level)
     if (batch.images && batch.images.length > 0) {
       for (const image of batch.images) {
         if (image.prediction) {
           const pred = image.prediction;
-          cell_counts.Heterophils += pred.numOfHeterophils || 0;
-          cell_counts.Eosinophils += pred.numOfEosinophils || 0;
-          cell_counts.Basophils += pred.numOfBasophils || 0;
-          cell_counts.Lymphocytes += pred.numOfLymphocytes || 0;
-          cell_counts.Monocytes += pred.numOfMonocytes || 0;
-          cell_counts.Thrombocytes += pred.numOfThrombocytes || 0;
+
+          // ดึงค่าจำนวนเซลล์แต่ละชนิดในภาพนั้นๆ (ดัก null/undefined ด้วย || 0)
+          const imgCounts = {
+            Heterophil: pred.numOfHeterophils || 0,
+            Eosinophil: pred.numOfEosinophils || 0,
+            Basophil: pred.numOfBasophils || 0,
+            Lymphocyte: pred.numOfLymphocytes || 0,
+            Monocyte: pred.numOfMonocytes || 0,
+            Thrombocyte: pred.numOfThrombocytes || 0,
+          };
+
+          // --- ส่วนที่ 1: เอาตัวเลขไปบวกสะสมในยอดรวมทั้งชุด ---
+          cell_counts.Heterophil += imgCounts.Heterophil;
+          cell_counts.Eosinophil += imgCounts.Eosinophil;
+          cell_counts.Basophil += imgCounts.Basophil;
+          cell_counts.Lymphocyte += imgCounts.Lymphocyte;
+          cell_counts.Monocyte += imgCounts.Monocyte;
+          cell_counts.Thrombocyte += imgCounts.Thrombocyte;
+
+          // --- ส่วนที่ 2: คำนวณเปอร์เซ็นต์และยอดรวมเฉพาะภาพนั้นๆ (Image Level) ---
+          const imageTotalCells = Object.values(imgCounts).reduce(
+            (sum, count) => sum + count,
+            0,
+          );
+
+          const imageClasses: Record<string, { count: number; percentage: number }> = {};
+          for (const [cellType, count] of Object.entries(imgCounts)) {
+            const percentage = imageTotalCells > 0
+              ? Number(((count / imageTotalCells) * 100).toFixed(2))
+              : 0;
+
+            imageClasses[cellType] = {
+              count: count,
+              percentage: percentage,
+            };
+          }
+
+          // แนบข้อมูลสรุประดับภาพเพิ่มเข้าไปใน object prediction ของรูปภาพนั้นทันที
+          Object.assign(pred, {
+            total_cells_detected: imageTotalCells,
+            classes: imageClasses,
+          });
         }
       }
     }
 
+    // 3. คำนวณยอดรวมและเปอร์เซ็นต์ระดับชุดข้อมูล (Batch Level)
     const total_cells_detected = Object.values(cell_counts).reduce(
       (sum, count) => sum + count,
       0,
     );
 
+    const classes: Record<string, { count: number; percentage: number }> = {};
+    for (const [cellType, count] of Object.entries(cell_counts)) {
+      const percentage = total_cells_detected > 0
+        ? Number(((count / total_cells_detected) * 100).toFixed(2))
+        : 0;
+
+      classes[cellType] = {
+        count: count,
+        percentage: percentage,
+      };
+    }
+
     return {
       summary: {
         total_images_in_batch: batch.images ? batch.images.length : 0,
         total_cells_detected,
-        cell_counts,
+        classes,
       },
       ...batch,
       user: safeUser,
