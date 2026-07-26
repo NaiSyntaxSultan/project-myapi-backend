@@ -435,7 +435,7 @@ export class BatchService {
         })
         .setParameters({
           startDate: `${startDate} 00:00:00`,
-          endDate: `${endDate} 23:59:59`,
+          endDate: `${endDate} 23:59:59.999`, 
         });
     }
 
@@ -467,6 +467,86 @@ export class BatchService {
         null as Date | null,
       );
 
+      const batchCellCounts = {
+        Heterophil: 0,
+        Eosinophil: 0,
+        Basophil: 0,
+        Lymphocyte: 0,
+        Monocyte: 0,
+        Thrombocyte: 0,
+      };
+
+      const formattedImages = completedImages.map((img) => {
+        let totalCellsInImage = 0;
+        const imageClasses: Record<string, { count: number; percentage: number }> = {};
+
+        if (img.prediction) {
+          const pred = img.prediction;
+          const imgCounts = {
+            Heterophil: pred.numOfHeterophils || 0,
+            Eosinophil: pred.numOfEosinophils || 0,
+            Basophil: pred.numOfBasophils || 0,
+            Lymphocyte: pred.numOfLymphocytes || 0,
+            Monocyte: pred.numOfMonocytes || 0,
+            Thrombocyte: pred.numOfThrombocytes || 0,
+          };
+
+          batchCellCounts.Heterophil += imgCounts.Heterophil;
+          batchCellCounts.Eosinophil += imgCounts.Eosinophil;
+          batchCellCounts.Basophil += imgCounts.Basophil;
+          batchCellCounts.Lymphocyte += imgCounts.Lymphocyte;
+          batchCellCounts.Monocyte += imgCounts.Monocyte;
+          batchCellCounts.Thrombocyte += imgCounts.Thrombocyte;
+
+          totalCellsInImage = Object.values(imgCounts).reduce((a, b) => a + b, 0);
+
+          for (const [cellType, count] of Object.entries(imgCounts)) {
+            const percentage = totalCellsInImage > 0
+              ? Number(((count / totalCellsInImage) * 100).toFixed(2))
+              : 0;
+
+            imageClasses[cellType] = { count, percentage };
+          }
+        }
+
+        return {
+          image_id: img.image_id,
+          image_name: img.image_name,
+          image_path: img.image_path,
+          total_cells_in_image: totalCellsInImage,
+          prediction: img.prediction
+            ? {
+                prediction_id: img.prediction.prediction_id,
+                predicted_at: img.prediction.predicted_at,
+                classes: imageClasses, 
+                detections: img.prediction.detections.map((det) => ({
+                  class_name: det.class_name,
+                  confidence: det.confidence,
+                  bbox: {
+                    x1: det.x1,
+                    y1: det.y1,
+                    x2: det.x2,
+                    y2: det.y2,
+                    width: det.width,
+                    height: det.height,
+                  },
+                })),
+              }
+            : null,
+        };
+      });
+
+      const batchTotalCells = Object.values(batchCellCounts).reduce((a, b) => a + b, 0);
+      const batchClasses: Record<string, { count: number; percentage: number }> = {};
+
+      for (const [cellType, count] of Object.entries(batchCellCounts)) {
+        const percentage = batchTotalCells > 0
+          ? Number(((count / batchTotalCells) * 100).toFixed(2))
+          : 0;
+
+        batchClasses[cellType] = { count, percentage };
+      }
+
       return {
         batch_id: batch.batch_id,
         smear_id: batch.smear_id,
@@ -484,80 +564,13 @@ export class BatchService {
           profile_image: batch.user?.profile_image || null,
         },
 
-        images: completedImages.map((img) => {
-          // --- เริ่มต้นส่วนคำนวณจำนวนเซลล์รวมและเปอร์เซ็นต์ต่อ 1 รูปภาพ ---
-          let totalCellsInImage = 0;
-          let cellPercentages = {
-            Heterophil: 0,
-            Eosinophil: 0,
-            Basophil: 0,
-            Lymphocyte: 0,
-            Monocyte: 0,
-            Thrombocyte: 0,
-          };
+        summary: { 
+          total_images_in_batch: completedImages.length,
+          total_cells_detected: batchTotalCells,
+          classes: batchClasses,
+        },
 
-          if (img.prediction) {
-            // 1. รวมจำนวนเซลล์ทุกชนิดในภาพนี้
-            totalCellsInImage =
-              (img.prediction.numOfHeterophils || 0) +
-              (img.prediction.numOfEosinophils || 0) +
-              (img.prediction.numOfBasophils || 0) +
-              (img.prediction.numOfLymphocytes || 0) +
-              (img.prediction.numOfMonocytes || 0) +
-              (img.prediction.numOfThrombocytes || 0);
-
-            // 2. ฟังก์ชันช่วยคำนวณหา % (ปัดเศษทศนิยม 2 ตำแหน่ง)
-            const getPercentage = (count: number) => {
-              if (totalCellsInImage === 0) return 0;
-              return Number(((count / totalCellsInImage) * 100).toFixed(2));
-            };
-
-            // 3. กำหนดค่าเปอร์เซ็นต์ของแต่ละเซลล์
-            cellPercentages = {
-              Heterophil: getPercentage(img.prediction.numOfHeterophils),
-              Eosinophil: getPercentage(img.prediction.numOfEosinophils),
-              Basophil: getPercentage(img.prediction.numOfBasophils),
-              Lymphocyte: getPercentage(img.prediction.numOfLymphocytes),
-              Monocyte: getPercentage(img.prediction.numOfMonocytes),
-              Thrombocyte: getPercentage(img.prediction.numOfThrombocytes),
-            };
-          }
-          // --- สิ้นสุดส่วนคำนวณ ---
-
-          return {
-            image_id: img.image_id,
-            image_name: img.image_name,
-            image_path: img.image_path,
-            total_cells_in_image: totalCellsInImage, // แทรกจำนวนเซลล์ทั้งหมดของภาพนี้
-            prediction: img.prediction
-              ? {
-                  prediction_id: img.prediction.prediction_id,
-                  predicted_at: img.prediction.predicted_at,
-                  cell_counts: {
-                    Heterophil: img.prediction.numOfHeterophils,
-                    Eosinophil: img.prediction.numOfEosinophils,
-                    Basophil: img.prediction.numOfBasophils,
-                    Lymphocyte: img.prediction.numOfLymphocytes,
-                    Monocyte: img.prediction.numOfMonocytes,
-                    Thrombocyte: img.prediction.numOfThrombocytes,
-                  },
-                  cell_percentages: cellPercentages, // แทรกเปอร์เซ็นต์ของแต่ละเซลล์
-                  detections: img.prediction.detections.map((det) => ({
-                    class_name: det.class_name,
-                    confidence: det.confidence,
-                    bbox: {
-                      x1: det.x1,
-                      y1: det.y1,
-                      x2: det.x2,
-                      y2: det.y2,
-                      width: det.width,
-                      height: det.height,
-                    },
-                  })),
-                }
-              : null,
-          };
-        }),
+        images: formattedImages,
       };
     });
 
