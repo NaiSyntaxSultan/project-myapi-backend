@@ -499,8 +499,20 @@ export class UserService {
 
   // profile
   async getMyProfile(userId: number, queryDto: GetProfileDto) {
-    const { smear_id, chicken_type, stain_type, startDate, endDate, page = 1, limit = 10 } = queryDto;
-    const skip = (page - 1) * limit;
+    const { 
+      smear_id, 
+      chicken_type, 
+      stain_type, 
+      startDate, 
+      endDate, 
+      completedPage = 1, 
+      pendingPage = 1, 
+      suspendedPage = 1,
+      limit = 10 } = queryDto;
+
+    const completedSkip = (completedPage - 1) * limit;
+    const pendingSkip = (pendingPage - 1) * limit;
+    const suspendedSkip = (suspendedPage - 1) * limit;
 
     const user = await this.userRepository.findOne({
       where: { user_id: userId },
@@ -700,9 +712,9 @@ export class UserService {
     const totalPendingFiltered = pending_batches.length;
     const totalSuspendedFiltered = suspended_batches.length;
 
-    const paginatedCompleted = completed_batches.slice(skip, skip + limit);
-    const paginatedPending = pending_batches.slice(skip, skip + limit);
-    const paginatedSuspended = suspended_batches.slice(skip, skip + limit);
+    const paginatedCompleted = completed_batches.slice(completedSkip, completedSkip + limit);
+    const paginatedPending = pending_batches.slice(pendingSkip, pendingSkip + limit);
+    const paginatedSuspended = suspended_batches.slice(suspendedSkip, suspendedSkip + limit);
 
     return {
       message: 'Profile and batch data retrieved successfully',
@@ -721,7 +733,7 @@ export class UserService {
           items: paginatedCompleted,
           meta: {
             total_items: totalCompletedFiltered,
-            current_page: Number(page),
+            current_page: Number(completedPage),
             per_page: Number(limit),
             total_pages: Math.ceil(totalCompletedFiltered / limit),
           },
@@ -730,7 +742,7 @@ export class UserService {
           items: paginatedPending,
           meta: {
             total_items: totalPendingFiltered,
-            current_page: Number(page),
+            current_page: Number(pendingPage),
             per_page: Number(limit),
             total_pages: Math.ceil(totalPendingFiltered / limit),
           },
@@ -739,7 +751,7 @@ export class UserService {
           items: paginatedSuspended,
           meta: {
             total_items: totalSuspendedFiltered,
-            current_page: Number(page),
+            current_page: Number(suspendedPage),
             per_page: Number(limit),
             total_pages: Math.ceil(totalSuspendedFiltered / limit),
           },

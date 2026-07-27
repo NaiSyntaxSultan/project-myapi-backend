@@ -28,12 +28,26 @@ export class GetProfileDto {
   @IsDateString()
   endDate?: string;
 
-  @ApiPropertyOptional({ default: 1 })
+  @ApiPropertyOptional({ default: 1, description: 'เลขหน้าของกลุ่ม Completed' })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  page?: number = 1;
+  completedPage?: number = 1;
+
+  @ApiPropertyOptional({ default: 1, description: 'เลขหน้าของกลุ่ม Pending' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  pendingPage?: number = 1;
+
+  @ApiPropertyOptional({ default: 1, description: 'เลขหน้าของกลุ่ม Suspended' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  suspendedPage?: number = 1;
 
   @ApiPropertyOptional({ default: 10 })
   @IsOptional()
