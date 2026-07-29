@@ -531,7 +531,7 @@ export class UserService {
       completedPage = 1,
       pendingPage = 1,
       suspendedPage = 1,
-      limit = 10,
+      limit = 12,
     } = queryDto;
 
     const completedSkip = (completedPage - 1) * limit;
@@ -552,6 +552,37 @@ export class UserService {
 
     if (!user) {
       throw new NotFoundException('User not found');
+    }
+
+    const allUserBatches = await this.batchRepository
+      .createQueryBuilder('batch')
+      .leftJoinAndSelect('batch.images', 'image')
+      .where('batch.user_id = :userId', { userId })
+      .getMany();
+
+    let absoluteCompletedCount = 0;
+    let absolutePendingCount = 0;
+    let absoluteSuspendedCount = 0;
+
+    for (const batch of allUserBatches) {
+      const totalImages = batch.images?.length || 0;
+      const hasSuspended = batch.images?.some(
+        (img) => img.image_status === 'suspended',
+      );
+      const completedImagesCount =
+        batch.images?.filter((img) => img.image_status === 'completed')
+          .length || 0;
+
+      const isCompleted =
+        !hasSuspended && totalImages > 0 && completedImagesCount === totalImages;
+
+      if (hasSuspended) {
+        absoluteSuspendedCount++;
+      } else if (isCompleted) {
+        absoluteCompletedCount++;
+      } else {
+        absolutePendingCount++;
+      }
     }
 
     const query = this.batchRepository
@@ -583,7 +614,8 @@ export class UserService {
     }, 'latest_prediction_time');
 
     query
-      .orderBy('latest_prediction_time', 'DESC', 'NULLS LAST')
+      .orderBy('latest_prediction_time IS NULL') 
+      .addOrderBy('latest_prediction_time', 'DESC')
       .addOrderBy('batch.created_at', 'DESC');
     const batches = await query.getMany();
 
@@ -597,10 +629,6 @@ export class UserService {
     const completed_batches: any[] = [];
     const pending_batches: any[] = [];
     const suspended_batches: any[] = [];
-
-    let absoluteCompletedCount = 0;
-    let absolutePendingCount = 0;
-    let absoluteSuspendedCount = 0;
 
     for (const batch of batches) {
       const totalImages = batch.images.length;
@@ -616,14 +644,6 @@ export class UserService {
         totalImages > 0 &&
         completedImages.length === totalImages;
       const isSuspended = hasSuspended;
-
-      if (isSuspended) {
-        absoluteSuspendedCount++;
-      } else if (isCompleted) {
-        absoluteCompletedCount++;
-      } else {
-        absolutePendingCount++;
-      }
 
       let latestPredictionDate: Date | null = null;
       if (isCompleted) {
