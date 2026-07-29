@@ -3,10 +3,15 @@ import { Type } from 'class-transformer';
 import { IsDateString, IsInt, IsOptional, IsString, Min } from 'class-validator';
 
 export class GetHomeDataDto {
-  @ApiPropertyOptional({ description: 'ค้นหาด้วยชื่อ-นามสกุล หรือจังหวัด' })
+  @ApiPropertyOptional({ description: 'ค้นหาด้วยชื่อ-นามสกุล' })
   @IsOptional()
   @IsString()
   search?: string;
+
+  @ApiPropertyOptional({ description: 'กรองตามจังหวัด' })
+  @IsOptional()
+  @IsString()
+  province?: string;
 
   @ApiPropertyOptional({ description: 'กรองตามสายพันธุ์/ประเภทไก่' })
   @IsOptional()

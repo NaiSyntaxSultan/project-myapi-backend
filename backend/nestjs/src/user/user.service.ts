@@ -14,14 +14,14 @@ import { GetProfileDto } from './dto/get-profile.dto';
 import { NotFoundException } from '@nestjs/common';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 
-
 @Injectable()
 export class UserService {
   constructor(
     @InjectRepository(User) private userRepository: Repository<User>,
     @InjectRepository(Batch) private batchRepository: Repository<Batch>,
     @InjectRepository(Image) private imageRepository: Repository<Image>,
-    @InjectRepository(Detection) private detectionRepository: Repository<Detection>,
+    @InjectRepository(Detection)
+    private detectionRepository: Repository<Detection>,
     private readonly mailerService: MailerService,
   ) {}
 
@@ -36,13 +36,12 @@ export class UserService {
 
   async findAllUsers(
     currentAdminId: number,
-    roleFilter?: string, 
-    searchEmail?: string, 
+    roleFilter?: string,
+    searchEmail?: string,
     statusFilter?: string,
     page: number = 1,
     limit: number = 10,
   ) {
-
     const currentPage = Number(page) || 1;
     const perPage = Number(limit) || 10;
     const skip = (currentPage - 1) * perPage;
@@ -66,7 +65,12 @@ export class UserService {
       whereCondition.is_active = false;
     }
 
-    const [[users, filteredTotalCount], totalCount, activeCount, suspendedCount] = await Promise.all([
+    const [
+      [users, filteredTotalCount],
+      totalCount,
+      activeCount,
+      suspendedCount,
+    ] = await Promise.all([
       this.userRepository.findAndCount({
         where: whereCondition,
         select: [
@@ -185,7 +189,7 @@ export class UserService {
       reason?.trim() ||
       'Violation of system terms of service or suspicious activity detected.';
 
-      try {
+    try {
       await this.mailerService.sendMail({
         to: user.email,
         subject: 'Account Suspended - Avian Blood System',
@@ -318,7 +322,7 @@ export class UserService {
           'email',
           'veterinary_license',
           'role',
-          'is_verified', 
+          'is_verified',
           'created_at',
         ],
         order: { created_at: 'ASC' },
@@ -384,7 +388,9 @@ export class UserService {
     user.is_verified = 2;
     await this.userRepository.save(user);
 
-    const rejectReason = reason?.trim() || 'Incomplete or invalid veterinary license and registration information.';
+    const rejectReason =
+      reason?.trim() ||
+      'Incomplete or invalid veterinary license and registration information.';
 
     try {
       await this.mailerService.sendMail({
@@ -434,17 +440,32 @@ export class UserService {
       pending_verification,
       total_batches,
       completed_batches_raw,
-      [pending_users_data, total_pending_items]
+      pending_batches_raw,
+      [pending_users_data, total_pending_items],
     ] = await Promise.all([
       this.userRepository.count(),
       this.userRepository.count({ where: { is_verified: 0 } }),
       this.batchRepository.count(),
-      
+
       this.batchRepository
         .createQueryBuilder('batch')
         .innerJoin('batch.images', 'image')
         .groupBy('batch.batch_id')
-        .having("SUM(CASE WHEN image.image_status != 'completed' THEN 1 ELSE 0 END) = 0")
+        .having(
+          "SUM(CASE WHEN image.image_status != 'completed' THEN 1 ELSE 0 END) = 0",
+        )
+        .getRawMany(),
+
+      this.batchRepository
+        .createQueryBuilder('batch')
+        .innerJoin('batch.images', 'image')
+        .groupBy('batch.batch_id')
+        .having(
+          "SUM(CASE WHEN image.image_status = 'pending' THEN 1 ELSE 0 END) > 0",
+        )
+        .andHaving(
+          "SUM(CASE WHEN image.image_status = 'suspended' THEN 1 ELSE 0 END) = 0",
+        )
         .getRawMany(),
 
       this.userRepository.findAndCount({
@@ -461,20 +482,22 @@ export class UserService {
         order: { created_at: 'DESC' },
         skip,
         take: limit,
-      })
+      }),
     ]);
 
     const completed_batches = completed_batches_raw.length;
 
-    const pending_batches = total_batches - completed_batches;
+    const pending_batches = pending_batches_raw.length;
 
-    const completed_percentage = total_batches > 0
-      ? ((completed_batches / total_batches) * 100).toFixed(2)
-      : 0;
+    const completed_percentage =
+      total_batches > 0
+        ? ((completed_batches / total_batches) * 100).toFixed(2)
+        : 0;
 
-    const pending_percentage = total_batches > 0 
-      ? ((pending_batches / total_batches) * 100).toFixed(2) 
-      : 0;
+    const pending_percentage =
+      total_batches > 0
+        ? ((pending_batches / total_batches) * 100).toFixed(2)
+        : 0;
 
     return {
       total_users,
@@ -488,27 +511,28 @@ export class UserService {
           current_page: Number(page),
           per_page: Number(limit),
           total_pages: Math.ceil(total_pending_items / limit),
-        }
+        },
       },
       prediction_status: {
         completed_percentage: Number(completed_percentage),
         pending_percentage: Number(pending_percentage),
-      }
+      },
     };
   }
 
   // profile
   async getMyProfile(userId: number, queryDto: GetProfileDto) {
-    const { 
-      smear_id, 
-      chicken_type, 
-      stain_type, 
-      startDate, 
-      endDate, 
-      completedPage = 1, 
-      pendingPage = 1, 
+    const {
+      smear_id,
+      chicken_type,
+      stain_type,
+      startDate,
+      endDate,
+      completedPage = 1,
+      pendingPage = 1,
       suspendedPage = 1,
-      limit = 10 } = queryDto;
+      limit = 10,
+    } = queryDto;
 
     const completedSkip = (completedPage - 1) * limit;
     const pendingSkip = (pendingPage - 1) * limit;
@@ -516,34 +540,18 @@ export class UserService {
 
     const user = await this.userRepository.findOne({
       where: { user_id: userId },
-      select: ['user_id', 'first_name', 'last_name', 'profile_image', 'email', 'role'],
+      select: [
+        'user_id',
+        'first_name',
+        'last_name',
+        'profile_image',
+        'email',
+        'role',
+      ],
     });
 
     if (!user) {
       throw new NotFoundException('User not found');
-    }
-
-    const allUserBatches = await this.batchRepository.find({
-      where: { user: { user_id: userId } },
-      relations: ['images'],
-    });
-
-    let absoluteCompletedCount = 0;
-    let absolutePendingCount = 0;
-    let absoluteSuspendedCount = 0;
-
-    for (const b of allUserBatches) {
-      const totalImg = b.images.length;
-      const hasSuspendedImg = b.images.some((img) => img.image_status === 'suspended');
-      const completedImg = b.images.filter((img) => img.image_status === 'completed').length;
-
-      if (hasSuspendedImg) {
-        absoluteSuspendedCount++; 
-      } else if (totalImg > 0 && completedImg === totalImg) {
-        absoluteCompletedCount++;
-      } else {
-        absolutePendingCount++;
-      }
     }
 
     const query = this.batchRepository
@@ -554,7 +562,9 @@ export class UserService {
       .where('batch.user_id = :userId', { userId });
 
     if (smear_id) {
-      query.andWhere('batch.smear_id LIKE :smearId', { smearId: `%${smear_id}%` });
+      query.andWhere('batch.smear_id LIKE :smearId', {
+        smearId: `%${smear_id}%`,
+      });
     }
     if (chicken_type) {
       query.andWhere('batch.chicken_type = :chicken_type', { chicken_type });
@@ -563,45 +573,96 @@ export class UserService {
       query.andWhere('batch.stain_type = :stain_type', { stain_type });
     }
 
-    query.orderBy('batch.created_at', 'DESC');
+    query.addSelect((qb) => {
+      return qb
+        .subQuery()
+        .select('MAX(pred.predicted_at)')
+        .from('images', 'img')
+        .innerJoin('img.prediction', 'pred')
+        .where('img.batch_id = batch.batch_id');
+    }, 'latest_prediction_time');
+
+    query
+      .orderBy('latest_prediction_time', 'DESC', 'NULLS LAST')
+      .addOrderBy('batch.created_at', 'DESC');
     const batches = await query.getMany();
 
-    let filterStart: Date | null = null;
-    let filterEnd: Date | null = null;
+    let filterStartTime: number | null = null;
+    let filterEndTime: number | null = null;
     if (startDate && endDate) {
-      filterStart = new Date(`${startDate}T00:00:00`);
-      filterEnd = new Date(`${endDate}T23:59:59.999`);
+      filterStartTime = new Date(`${startDate}T00:00:00.000+07:00`).getTime();
+      filterEndTime = new Date(`${endDate}T23:59:59.999+07:00`).getTime();
     }
 
     const completed_batches: any[] = [];
     const pending_batches: any[] = [];
     const suspended_batches: any[] = [];
 
+    let absoluteCompletedCount = 0;
+    let absolutePendingCount = 0;
+    let absoluteSuspendedCount = 0;
+
     for (const batch of batches) {
       const totalImages = batch.images.length;
-      const hasSuspended = batch.images.some((img) => img.image_status === 'suspended');
-      const completedImages = batch.images.filter((img) => img.image_status === 'completed');
+      const hasSuspended = batch.images.some(
+        (img) => img.image_status === 'suspended',
+      );
+      const completedImages = batch.images.filter(
+        (img) => img.image_status === 'completed',
+      );
 
-      const isCompleted = !hasSuspended && totalImages > 0 && completedImages.length === totalImages;
+      const isCompleted =
+        !hasSuspended &&
+        totalImages > 0 &&
+        completedImages.length === totalImages;
       const isSuspended = hasSuspended;
+
+      if (isSuspended) {
+        absoluteSuspendedCount++;
+      } else if (isCompleted) {
+        absoluteCompletedCount++;
+      } else {
+        absolutePendingCount++;
+      }
 
       let latestPredictionDate: Date | null = null;
       if (isCompleted) {
-        latestPredictionDate = completedImages.reduce((latest, img) => {
-          if (!img.prediction) return latest;
-          return !latest || img.prediction.predicted_at > latest
-            ? img.prediction.predicted_at
-            : latest;
-        }, null as Date | null);
+        latestPredictionDate = completedImages.reduce(
+          (latest, img) => {
+            if (!img.prediction) return latest;
+            return !latest || img.prediction.predicted_at > latest
+              ? img.prediction.predicted_at
+              : latest;
+          },
+          null as Date | null,
+        );
       }
 
-      if (filterStart && filterEnd) {
+      if (filterStartTime && filterEndTime) {
         if (isCompleted) {
-          if (!latestPredictionDate || latestPredictionDate < filterStart || latestPredictionDate > filterEnd) {
+          const predTime = latestPredictionDate
+            ? latestPredictionDate instanceof Date
+              ? latestPredictionDate.getTime()
+              : new Date(latestPredictionDate).getTime()
+            : 0;
+          if (
+            !predTime ||
+            predTime < filterStartTime ||
+            predTime > filterEndTime
+          ) {
             continue;
           }
         } else {
-          if (batch.created_at < filterStart || batch.created_at > filterEnd) {
+          const createTime = batch.created_at
+            ? batch.created_at instanceof Date
+              ? batch.created_at.getTime()
+              : new Date(batch.created_at).getTime()
+            : 0;
+          if (
+            !createTime ||
+            createTime < filterStartTime ||
+            createTime > filterEndTime
+          ) {
             continue;
           }
         }
@@ -637,13 +698,20 @@ export class UserService {
           batchCellCounts.Monocyte += imgCounts.Monocyte;
           batchCellCounts.Thrombocyte += imgCounts.Thrombocyte;
 
-          const imageTotalCells = Object.values(imgCounts).reduce((a, b) => a + b, 0);
-          const imageClasses: Record<string, { count: number; percentage: number }> = {};
+          const imageTotalCells = Object.values(imgCounts).reduce(
+            (a, b) => a + b,
+            0,
+          );
+          const imageClasses: Record<
+            string,
+            { count: number; percentage: number }
+          > = {};
 
           for (const [cellType, count] of Object.entries(imgCounts)) {
-            const percentage = imageTotalCells > 0
-              ? Number(((count / imageTotalCells) * 100).toFixed(2))
-              : 0;
+            const percentage =
+              imageTotalCells > 0
+                ? Number(((count / imageTotalCells) * 100).toFixed(2))
+                : 0;
 
             imageClasses[cellType] = { count, percentage };
           }
@@ -664,13 +732,20 @@ export class UserService {
         };
       });
 
-      const batchTotalCells = Object.values(batchCellCounts).reduce((a, b) => a + b, 0);
-      const batchClasses: Record<string, { count: number; percentage: number }> = {};
+      const batchTotalCells = Object.values(batchCellCounts).reduce(
+        (a, b) => a + b,
+        0,
+      );
+      const batchClasses: Record<
+        string,
+        { count: number; percentage: number }
+      > = {};
 
       for (const [cellType, count] of Object.entries(batchCellCounts)) {
-        const percentage = batchTotalCells > 0
-          ? Number(((count / batchTotalCells) * 100).toFixed(2))
-          : 0;
+        const percentage =
+          batchTotalCells > 0
+            ? Number(((count / batchTotalCells) * 100).toFixed(2))
+            : 0;
 
         batchClasses[cellType] = { count, percentage };
       }
@@ -683,7 +758,11 @@ export class UserService {
         age: batch.age,
         stain_type: batch.stain_type,
         description: batch.description,
-        status: isSuspended ? 'suspended' : isCompleted ? 'completed' : 'pending',
+        status: isSuspended
+          ? 'suspended'
+          : isCompleted
+            ? 'completed'
+            : 'pending',
         created_at: batch.created_at,
         predicted_at: isCompleted ? latestPredictionDate : null,
         owner: {
@@ -694,9 +773,9 @@ export class UserService {
         summary: {
           total_images_in_batch: totalImages,
           total_cells_detected: batchTotalCells,
-          classes: batchClasses, 
+          classes: batchClasses,
         },
-        images: formattedImages, 
+        images: formattedImages,
       };
 
       if (isSuspended) {
@@ -708,13 +787,40 @@ export class UserService {
       }
     }
 
+    completed_batches.sort((a, b) => {
+      const dateA = a.predicted_at ? new Date(a.predicted_at).getTime() : 0;
+      const dateB = b.predicted_at ? new Date(b.predicted_at).getTime() : 0;
+      return dateB - dateA;
+    });
+
+    pending_batches.sort((a, b) => {
+      const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return dateB - dateA;
+    });
+
+    suspended_batches.sort((a, b) => {
+      const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return dateB - dateA;
+    });
+
     const totalCompletedFiltered = completed_batches.length;
     const totalPendingFiltered = pending_batches.length;
     const totalSuspendedFiltered = suspended_batches.length;
 
-    const paginatedCompleted = completed_batches.slice(completedSkip, completedSkip + limit);
-    const paginatedPending = pending_batches.slice(pendingSkip, pendingSkip + limit);
-    const paginatedSuspended = suspended_batches.slice(suspendedSkip, suspendedSkip + limit);
+    const paginatedCompleted = completed_batches.slice(
+      completedSkip,
+      completedSkip + limit,
+    );
+    const paginatedPending = pending_batches.slice(
+      pendingSkip,
+      pendingSkip + limit,
+    );
+    const paginatedSuspended = suspended_batches.slice(
+      suspendedSkip,
+      suspendedSkip + limit,
+    );
 
     return {
       message: 'Profile and batch data retrieved successfully',
@@ -726,7 +832,7 @@ export class UserService {
         role: user.role,
         total_completed_batches: absoluteCompletedCount,
         total_pending_batches: absolutePendingCount,
-        total_suspended_batches: absoluteSuspendedCount, 
+        total_suspended_batches: absoluteSuspendedCount,
       },
       data: {
         completed_batches: {
@@ -747,7 +853,7 @@ export class UserService {
             total_pages: Math.ceil(totalPendingFiltered / limit),
           },
         },
-        suspended_batches: { 
+        suspended_batches: {
           items: paginatedSuspended,
           meta: {
             total_items: totalSuspendedFiltered,
@@ -763,15 +869,17 @@ export class UserService {
   async deleteMyBatch(userId: number, batchId: number) {
     // ค้นหาชุดข้อมูลและตรวจสอบว่าเป็นของ User คนนี้จริงๆ
     const batch = await this.batchRepository.findOne({
-      where: { 
-        batch_id: batchId, 
-        user: { user_id: userId } 
+      where: {
+        batch_id: batchId,
+        user: { user_id: userId },
       },
       relations: ['images'],
     });
 
     if (!batch) {
-      throw new NotFoundException('Batch not found, or you do not have permission to delete it');
+      throw new NotFoundException(
+        'Batch not found, or you do not have permission to delete it',
+      );
     }
 
     // ลบไฟล์รูปภาพจริงๆ ออกจากระบบไฟล์ (โฟลเดอร์ uploads)
@@ -795,7 +903,11 @@ export class UserService {
     };
   }
 
-  async updateMyProfile(userId: number, updateDto: UpdateProfileDto, file?: Express.Multer.File) {
+  async updateMyProfile(
+    userId: number,
+    updateDto: UpdateProfileDto,
+    file?: Express.Multer.File,
+  ) {
     const user = await this.userRepository.findOne({
       where: { user_id: userId },
     });
@@ -852,11 +964,11 @@ export class UserService {
         data: {
           user_id: user.user_id,
           is_active: user.is_active,
-        }
+        },
       };
     }
 
-    user.is_active = true; 
+    user.is_active = true;
 
     await this.userRepository.save(user);
 
@@ -896,11 +1008,12 @@ export class UserService {
     }
 
     return {
-      message: 'User account activated and notification email sent successfully',
+      message:
+        'User account activated and notification email sent successfully',
       data: {
         user_id: user.user_id,
         is_active: user.is_active,
-      }
+      },
     };
   }
 
@@ -919,15 +1032,17 @@ export class UserService {
         data: {
           user_id: user.user_id,
           is_verified: user.is_verified,
-        }
+        },
       };
     }
 
     if (user.is_verified === 1) {
-      throw new BadRequestException('Cannot undo rejection for an already verified user');
+      throw new BadRequestException(
+        'Cannot undo rejection for an already verified user',
+      );
     }
 
-    user.is_verified = 0; 
+    user.is_verified = 0;
 
     await this.userRepository.save(user);
 
@@ -969,25 +1084,32 @@ export class UserService {
     }
 
     return {
-      message: 'User rejection has been undone and a notification email has been sent successfully',
+      message:
+        'User rejection has been undone and a notification email has been sent successfully',
       data: {
         user_id: user.user_id,
         is_verified: user.is_verified,
-      }
+      },
     };
   }
 
   async deleteMyBatchPredictions(userId: number, batchId: number) {
     const batch = await this.batchRepository.findOne({
-      where: { 
-        batch_id: batchId, 
-        user: { user_id: userId } 
+      where: {
+        batch_id: batchId,
+        user: { user_id: userId },
       },
-      relations: ['images', 'images.prediction', 'images.prediction.detections'],
+      relations: [
+        'images',
+        'images.prediction',
+        'images.prediction.detections',
+      ],
     });
 
     if (!batch) {
-      throw new NotFoundException('Batch not found, or you do not have permission to modify it');
+      throw new NotFoundException(
+        'Batch not found, or you do not have permission to modify it',
+      );
     }
 
     if (!batch.images || batch.images.length === 0) {
@@ -996,7 +1118,10 @@ export class UserService {
 
     for (const image of batch.images) {
       if (image.prediction) {
-        if (image.prediction.detections && image.prediction.detections.length > 0) {
+        if (
+          image.prediction.detections &&
+          image.prediction.detections.length > 0
+        ) {
           await this.detectionRepository.remove(image.prediction.detections);
         }
         await this.imageRepository.manager.remove(image.prediction);
@@ -1008,7 +1133,8 @@ export class UserService {
     await this.imageRepository.save(batch.images);
 
     return {
-      message: 'Batch predictions deleted successfully. All images are now set to pending status.',
+      message:
+        'Batch predictions deleted successfully. All images are now set to pending status.',
     };
   }
 }

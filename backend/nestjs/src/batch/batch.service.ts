@@ -388,6 +388,7 @@ export class BatchService {
       page = 1,
       limit = 20,
       search,
+      province,
       chicken_type,
       startDate,
       endDate,
@@ -412,9 +413,13 @@ export class BatchService {
 
     if (search) {
       query.andWhere(
-        '(batch.province LIKE :search OR user.first_name LIKE :search OR user.last_name LIKE :search)',
+        '(user.first_name LIKE :search OR user.last_name LIKE :search)',
         { search: `%${search}%` },
       );
+    }
+
+    if (province) {
+      query.andWhere('batch.province = :province', { province });
     }
 
     if (chicken_type) {
@@ -439,7 +444,16 @@ export class BatchService {
         });
     }
 
-    query.orderBy('batch.created_at', 'DESC');
+    query.addSelect((qb) => {
+      return qb
+        .subQuery()
+        .select('MAX(pred.predicted_at)')
+        .from('images', 'img')
+        .innerJoin('img.prediction', 'pred')
+        .where('img.batch_id = batch.batch_id');
+    }, 'latest_prediction');
+
+    query.orderBy('latest_prediction', 'DESC');
 
     const [batches, total_items] = await query
       .skip(skip)
