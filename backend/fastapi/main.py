@@ -30,7 +30,7 @@ def get_db_connection():
 # Config
 # ---------------------------------------------------------------------------
 
-CONF_THRESHOLD = 0.001
+CONF_THRESHOLD = 0.5
 
 MODELS = {
     "wright": YOLO("models/wright.pt"),
