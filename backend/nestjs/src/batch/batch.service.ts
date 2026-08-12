@@ -85,6 +85,7 @@ export class BatchService {
       'batch.smear_id',
       'batch.chicken_type',
       'batch.age',
+      'batch.sex',
       'batch.province',
       'batch.stain_type',
       'batch.created_at',
@@ -305,23 +306,23 @@ export class BatchService {
           cell_counts.Monocyte += imgCounts.Monocyte;
           cell_counts.Thrombocyte += imgCounts.Thrombocyte;
 
-          // --- ส่วนที่ 2: คำนวณเปอร์เซ็นต์และยอดรวมเฉพาะภาพนั้นๆ (Image Level) ---
-          const imageTotalCells = Object.values(imgCounts).reduce(
-            (sum, count) => sum + count,
-            0,
-          );
-
+          const imageTotalCells = Object.values(imgCounts).reduce((sum, count) => sum + count, 0);
           const imageClasses: Record<string, { count: number; percentage: number }> = {};
-          for (const [cellType, count] of Object.entries(imgCounts)) {
-            const percentage = imageTotalCells > 0
-              ? Number(((count / imageTotalCells) * 100).toFixed(2))
-              : 0;
 
-            imageClasses[cellType] = {
-              count: count,
-              percentage: percentage,
-            };
+          const imageWbcTotal = 
+            imgCounts.Heterophil + imgCounts.Eosinophil + imgCounts.Basophil + 
+            imgCounts.Lymphocyte + imgCounts.Monocyte;
+
+          for (const [cellType, count] of Object.entries(imgCounts)) {
+            let percentage = 0;
+            if (cellType === 'Thrombocyte') {
+              percentage = imageWbcTotal > 0 ? Number(((count * 100) / imageWbcTotal).toFixed(2)) : 0;
+            } else {
+              percentage = imageWbcTotal > 0 ? Number(((count / imageWbcTotal) * 100).toFixed(2)) : 0;
+            }
+            imageClasses[cellType] = { count: count, percentage: percentage };
           }
+          
 
           // แนบข้อมูลสรุประดับภาพเพิ่มเข้าไปใน object prediction ของรูปภาพนั้นทันที
           Object.assign(pred, {
@@ -332,22 +333,21 @@ export class BatchService {
       }
     }
 
-    // 3. คำนวณยอดรวมและเปอร์เซ็นต์ระดับชุดข้อมูล (Batch Level)
-    const total_cells_detected = Object.values(cell_counts).reduce(
-      (sum, count) => sum + count,
-      0,
-    );
-
+    const total_cells_detected = Object.values(cell_counts).reduce((sum, count) => sum + count, 0);
     const classes: Record<string, { count: number; percentage: number }> = {};
-    for (const [cellType, count] of Object.entries(cell_counts)) {
-      const percentage = total_cells_detected > 0
-        ? Number(((count / total_cells_detected) * 100).toFixed(2))
-        : 0;
 
-      classes[cellType] = {
-        count: count,
-        percentage: percentage,
-      };
+    const batchWbcTotal = 
+      cell_counts.Heterophil + cell_counts.Eosinophil + cell_counts.Basophil + 
+      cell_counts.Lymphocyte + cell_counts.Monocyte;
+
+    for (const [cellType, count] of Object.entries(cell_counts)) {
+      let percentage = 0;
+      if (cellType === 'Thrombocyte') {
+        percentage = batchWbcTotal > 0 ? Number(((count * 100) / batchWbcTotal).toFixed(2)) : 0;
+      } else {
+        percentage = batchWbcTotal > 0 ? Number(((count / batchWbcTotal) * 100).toFixed(2)) : 0;
+      }
+      classes[cellType] = { count: count, percentage: percentage };
     }
 
     return {
@@ -513,11 +513,26 @@ export class BatchService {
           batchCellCounts.Thrombocyte += imgCounts.Thrombocyte;
 
           totalCellsInImage = Object.values(imgCounts).reduce((a, b) => a + b, 0);
+          const wbcTotalInImage =
+            imgCounts.Heterophil +
+            imgCounts.Eosinophil +
+            imgCounts.Basophil +
+            imgCounts.Lymphocyte +
+            imgCounts.Monocyte;
 
           for (const [cellType, count] of Object.entries(imgCounts)) {
-            const percentage = totalCellsInImage > 0
-              ? Number(((count / totalCellsInImage) * 100).toFixed(2))
-              : 0;
+            let percentage = 0;
+            if (cellType === 'Thrombocyte') {
+              // สูตร: (Thrombocyte * 100) / WBC ทั้งหมด
+              percentage = wbcTotalInImage > 0
+                ? Number(((count * 100) / wbcTotalInImage).toFixed(2))
+                : 0;
+            } else {
+              // 5 เม็ดเลือดขาว: คิด % จากยอดรวมเม็ดเลือดขาว 100%
+              percentage = wbcTotalInImage > 0
+                ? Number(((count / wbcTotalInImage) * 100).toFixed(2))
+                : 0;
+            }
 
             imageClasses[cellType] = { count, percentage };
           }
@@ -553,10 +568,26 @@ export class BatchService {
       const batchTotalCells = Object.values(batchCellCounts).reduce((a, b) => a + b, 0);
       const batchClasses: Record<string, { count: number; percentage: number }> = {};
 
+      const batchWbcTotal =
+        batchCellCounts.Heterophil +
+        batchCellCounts.Eosinophil +
+        batchCellCounts.Basophil +
+        batchCellCounts.Lymphocyte +
+        batchCellCounts.Monocyte;
+
       for (const [cellType, count] of Object.entries(batchCellCounts)) {
-        const percentage = batchTotalCells > 0
-          ? Number(((count / batchTotalCells) * 100).toFixed(2))
-          : 0;
+        let percentage = 0;
+        if (cellType === 'Thrombocyte') {
+          // สูตร: (Thrombocyte * 100) / WBC ทั้งหมด
+          percentage = batchWbcTotal > 0
+            ? Number(((count * 100) / batchWbcTotal).toFixed(2))
+            : 0;
+        } else {
+          // 5 เม็ดเลือดขาว: คิด % จากยอดรวมเม็ดเลือดขาว 100%
+          percentage = batchWbcTotal > 0
+            ? Number(((count / batchWbcTotal) * 100).toFixed(2))
+            : 0;
+        }
 
         batchClasses[cellType] = { count, percentage };
       }
@@ -567,6 +598,7 @@ export class BatchService {
         chicken_type: batch.chicken_type,
         province: batch.province,
         age: batch.age,
+        sex: batch.sex,
         stain_type: batch.stain_type,
         description: batch.description || '-',
         status: batchStatus,

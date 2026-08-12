@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsOptional, IsString, IsIn } from 'class-validator';
 
 export class CreateBatchDto {
   @ApiProperty({ example: 'AV-44291' })
@@ -23,6 +23,12 @@ export class CreateBatchDto {
   @IsNumber()
   @IsNotEmpty()
   age: number;
+
+  @ApiProperty({ example: 'Female', enum: ['Male', 'Female'] })
+  @IsString()
+  @IsNotEmpty()
+  @IsIn(['Male', 'Female'])
+  sex: string;
 
   @ApiProperty({ example: 'Giemsa' })
   @IsString()

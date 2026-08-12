@@ -95,13 +95,22 @@ def build_response(mode: str, filename: str, results) -> dict:
 
     total_detections = sum(len(data["confidences"]) for data in grouped_data.values())
 
+    wbc_classes = {"Basophil", "Eosinophil", "Heterophil", "Lymphocyte", "Monocyte"}
+    wbc_total = sum(
+        len(data["confidences"])
+        for class_name, data in grouped_data.items()
+        if class_name in wbc_classes
+    )
 
     classes = {}
 
     for class_name, data in grouped_data.items():
         count = len(data["confidences"])
 
-        percentage = round((count / total_detections) * 100, 2) if total_detections > 0 else 0.0
+        if class_name == "Thrombocyte":
+            percentage = round((count * 100) / wbc_total, 2) if wbc_total > 0 else 0.0
+        else:
+            percentage = round((count / wbc_total) * 100, 2) if wbc_total > 0 else 0.0
 
         classes[class_name] = {
             "count":          count,
@@ -232,9 +241,18 @@ async def predict_batch(
         else:
             failed_count += 1
 
+    wbc_classes = {"Basophil", "Eosinophil", "Heterophil", "Lymphocyte", "Monocyte"}
+    batch_wbc_total = sum(
+        count for class_name, count in batch_class_counts.items() if class_name in wbc_classes
+    )
+
     summary_classes = {}
     for class_name, count in batch_class_counts.items():
-        percentage = round((count / batch_total_detections) * 100, 2) if batch_total_detections > 0 else 0.0
+        if class_name == "Thrombocyte":
+            percentage = round((count * 100) / batch_wbc_total, 2) if batch_wbc_total > 0 else 0.0
+        else:
+            percentage = round((count / batch_wbc_total) * 100, 2) if batch_wbc_total > 0 else 0.0
+            
         summary_classes[class_name] = {
             "count": count,
             "percentage": percentage

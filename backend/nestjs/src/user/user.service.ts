@@ -718,21 +718,20 @@ export class UserService {
           batchCellCounts.Monocyte += imgCounts.Monocyte;
           batchCellCounts.Thrombocyte += imgCounts.Thrombocyte;
 
-          const imageTotalCells = Object.values(imgCounts).reduce(
-            (a, b) => a + b,
-            0,
-          );
-          const imageClasses: Record<
-            string,
-            { count: number; percentage: number }
-          > = {};
+          const imageTotalCells = Object.values(imgCounts).reduce((a, b) => a + b, 0);
+          const imageClasses: Record<string, { count: number; percentage: number }> = {};
+          
+          const imageWbcTotal = 
+            imgCounts.Heterophil + imgCounts.Eosinophil + imgCounts.Basophil + 
+            imgCounts.Lymphocyte + imgCounts.Monocyte;
 
           for (const [cellType, count] of Object.entries(imgCounts)) {
-            const percentage =
-              imageTotalCells > 0
-                ? Number(((count / imageTotalCells) * 100).toFixed(2))
-                : 0;
-
+            let percentage = 0;
+            if (cellType === 'Thrombocyte') {
+              percentage = imageWbcTotal > 0 ? Number(((count * 100) / imageWbcTotal).toFixed(2)) : 0;
+            } else {
+              percentage = imageWbcTotal > 0 ? Number(((count / imageWbcTotal) * 100).toFixed(2)) : 0;
+            }
             imageClasses[cellType] = { count, percentage };
           }
 
@@ -752,21 +751,20 @@ export class UserService {
         };
       });
 
-      const batchTotalCells = Object.values(batchCellCounts).reduce(
-        (a, b) => a + b,
-        0,
-      );
-      const batchClasses: Record<
-        string,
-        { count: number; percentage: number }
-      > = {};
+      const batchTotalCells = Object.values(batchCellCounts).reduce((a, b) => a + b, 0);
+      const batchClasses: Record<string, { count: number; percentage: number }> = {};
+      
+      const batchWbcTotal = 
+        batchCellCounts.Heterophil + batchCellCounts.Eosinophil + batchCellCounts.Basophil + 
+        batchCellCounts.Lymphocyte + batchCellCounts.Monocyte;
 
       for (const [cellType, count] of Object.entries(batchCellCounts)) {
-        const percentage =
-          batchTotalCells > 0
-            ? Number(((count / batchTotalCells) * 100).toFixed(2))
-            : 0;
-
+        let percentage = 0;
+        if (cellType === 'Thrombocyte') {
+          percentage = batchWbcTotal > 0 ? Number(((count * 100) / batchWbcTotal).toFixed(2)) : 0;
+        } else {
+          percentage = batchWbcTotal > 0 ? Number(((count / batchWbcTotal) * 100).toFixed(2)) : 0;
+        }
         batchClasses[cellType] = { count, percentage };
       }
 
@@ -776,6 +774,7 @@ export class UserService {
         chicken_type: batch.chicken_type,
         province: batch.province,
         age: batch.age,
+        sex: batch.sex,
         stain_type: batch.stain_type,
         description: batch.description,
         status: isSuspended

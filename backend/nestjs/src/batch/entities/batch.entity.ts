@@ -27,6 +27,9 @@ export class Batch {
   @Column({ type: 'int' })
   age: number;
 
+  @Column({ nullable: true })
+  sex: string;
+
   @Column()
   stain_type: string;
 
