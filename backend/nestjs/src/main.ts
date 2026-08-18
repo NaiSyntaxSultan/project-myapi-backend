@@ -11,10 +11,12 @@ async function bootstrap() {
 
   app.enableCors();
 
+  app.setGlobalPrefix('api');
+
   app.useGlobalPipes(new ValidationPipe({ transform: true }));
 
   app.useStaticAssets(join(__dirname, '..', 'uploads'), {
-    prefix: '/uploads/',
+    prefix: '/api/uploads/',
   });
 
   const config = new DocumentBuilder()
@@ -25,8 +27,10 @@ async function bootstrap() {
     .addServer('/api')
     .build();
 
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('docs', app, document);
+  const document = SwaggerModule.createDocument(app, config, {
+    ignoreGlobalPrefix: true, 
+  });
+  SwaggerModule.setup('api/docs', app, document);
 
   await app.listen(process.env.PORT ?? 30001);
 }
