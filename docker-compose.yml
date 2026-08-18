@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # 1. ฐานข้อมูล MySQL
+  # ฐานข้อมูล MySQL
   mysql-db:
     image: mysql:8.0
     container_name: avian_mysql
@@ -34,44 +34,47 @@ services:
     depends_on:
       - mysql-db
 
-  # 2. ฝั่งประมวลผล AI (FastAPI)
+  # ฝั่งประมวลผล AI (FastAPI)
   fastapi-ai:
-    build: ./fastapi
+    build: ./backend/fastapi
     container_name: avian_fastapi
     restart: always
     env_file:
       - .env
-    #ports:
-      #- "8000:8000"
     depends_on:
       - mysql-db
 
-  # 3. ฝั่ง API หลัก (NestJS)
+  # ฝั่ง API หลัก (NestJS)
   nestjs-api:
-    build: ./nestjs
+    build: ./backend/nestjs
     container_name: avian_nestjs
     restart: always
     env_file:
       - .env
-    #ports:
-      #- "3000:3000"
     volumes:
-      - ./nestjs/uploads:/app/uploads
+      - ./backend/nestjs/uploads:/app/uploads
     depends_on:
       mysql-db:
         condition: service_healthy
       fastapi-ai:
         condition: service_started
+
+  react-frontend:
+    build: ./frontend
+    container_name: avian_react
+    restart: always
+
   nginx:
     image: nginx:latest
     container_name: avian_nginx
     ports:
       - "80:80"  
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./backend/nginx/nginx.conf:/etc/nginx/conf.d/default.conf
     depends_on:
       - nestjs-api
       - fastapi-ai
+      - react-frontend
 
 volumes:
   mysql_data: # เอาไว้เซฟข้อมูลตารางฐานข้อมูลไม่ให้หาย
