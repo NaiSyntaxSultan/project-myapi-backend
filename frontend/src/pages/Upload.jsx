@@ -137,7 +137,7 @@ const thaiProvinces = [
 ];
 
 const chickenTypes = ["Laying hen", "Native chicken"];
-const chickenSexOptions = ["Rooster", "Hen"];
+const chickenSexOptions = ["Male", "Female"];
 
 const selectMenuPortalStyle = {
   menuPortal: (base) => ({ ...base, zIndex: 9999 }),

@@ -24,10 +24,10 @@ export class CreateBatchDto {
   @IsNotEmpty()
   age: number;
 
-  @ApiProperty({ example: 'Hen', enum: ['Rooster', 'Hen'] })
+  @ApiProperty({ example: 'Female', enum: ['Male', 'Female'] })
   @IsString()
   @IsNotEmpty()
-  @IsIn(['Rooster', 'Hen'])
+  @IsIn(['Male', 'Female'])
   sex: string;
 
   @ApiProperty({ example: 'Giemsa' })

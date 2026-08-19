@@ -71,6 +71,10 @@ export class AuthService {
       throw new UnauthorizedException('Your account has not been approved yet.');
     }
 
+    if (!user.is_active) {
+      throw new UnauthorizedException('Your account has been deactivated.');
+    }
+
     const payload = { 
       sub: user.user_id, 
       email: user.email, 

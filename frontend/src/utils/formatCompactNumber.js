@@ -4,13 +4,6 @@ const COMPACT_NUMBER_UNITS = [
   "M",
   "B",
   "T",
-  "Qa",
-  "Qi",
-  "Sx",
-  "Sp",
-  "Oc",
-  "No",
-  "Dc",
 ];
 
 const trimTrailingZero = (value) => {
