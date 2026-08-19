@@ -67,17 +67,23 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password.');
     }
 
-    if (!user.is_verified) {
-      throw new UnauthorizedException('Your account has not been approved yet.');
+    if (user.is_verified === 0) {
+      throw new UnauthorizedException(
+        'Your account has not been approved yet.',
+      );
+    } else if (user.is_verified === 2) {
+      throw new UnauthorizedException(
+        'Your account request has been rejected.',
+      );
     }
 
     if (!user.is_active) {
       throw new UnauthorizedException('Your account has been deactivated.');
     }
 
-    const payload = { 
-      sub: user.user_id, 
-      email: user.email, 
+    const payload = {
+      sub: user.user_id,
+      email: user.email,
       role: user.role,
       first_name: user.first_name,
       last_name: user.last_name,
